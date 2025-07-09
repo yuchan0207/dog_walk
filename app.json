@@ -37,6 +37,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+
+    "extra": {
+      "EXPO_PUBLIC_SUPABASE_URL": "https://nspnyhnadqlhcucbtugx.supabase.co",
+      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zcG55aG5hZHFsaGN1Y2J0dWd4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEwODk2OTksImV4cCI6MjA2NjY2NTY5OX0.1k5sXN_X_AGxXVswiVv5iwP3WKvTp_AsrD1U96AxxM8"
     }
   }
 }
