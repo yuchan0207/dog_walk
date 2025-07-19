@@ -1,7 +1,8 @@
 'use client';
 
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 
 type WalkRequest = {
   id: string;
@@ -22,7 +23,6 @@ type WalkRequest = {
   created_at: string;
   requester_profile?: {
     username: string;
-    bio?: string;
   };
 };
 
@@ -56,6 +56,7 @@ export default function WalkRequestsScreen() {
         )
       `)
       .eq('to_user_id', user.id)
+      .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -68,18 +69,25 @@ export default function WalkRequestsScreen() {
     setLoading(false);
   };
 
-  useEffect(() => {
-    fetchRequests();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchRequests();
+    }, [])
+  );
 
   const renderItem = ({ item }: { item: WalkRequest }) => (
     <TouchableOpacity
       style={styles.card}
       onPress={() => {
         router.push({
-          pathname: '/request-detail',
-          params: { requestId: item.id },
+          pathname: '/request-detail-profile',
+          params: {
+            requestId: item.id,
+            dogId: item.dog_id,
+            userId: item.from_user_id, // ✅ 이게 중요해
+          },
         });
+
       }}
     >
       <Text style={styles.title}>{item.requester_profile?.username || '사용자'}</Text>
@@ -107,7 +115,9 @@ export default function WalkRequestsScreen() {
 
       {requests.length === 0 ? (
         <View style={styles.center}>
-          <Text style={{ marginTop: 20, fontSize: 16, color: '#777' }}>아직 신청이 없어요.</Text>
+          <Text style={{ marginTop: 20, fontSize: 16, color: '#777' }}>
+            아직 신청이 없어요.
+          </Text>
         </View>
       ) : (
         <FlatList

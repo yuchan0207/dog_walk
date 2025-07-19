@@ -66,10 +66,6 @@ export default function LoginScreen() {
         <Text style={styles.buttonText}>로그인</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => Alert.alert('아직 구현되지 않았어요')}>
-        <Text style={styles.linkText}>비밀번호를 잊으셨나요?</Text>
-      </TouchableOpacity>
-
       <TouchableOpacity onPress={() => router.push('./signup')}>
         <Text style={styles.signupText}>처음 오셨나요? 회원가입하기</Text>
       </TouchableOpacity>

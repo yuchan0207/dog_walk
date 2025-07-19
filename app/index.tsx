@@ -16,7 +16,7 @@ export default function IndexScreen() {
 
       if (data?.user) {
         // 로그인된 경우 -> 바로 홈으로 이동
-        router.replace('./home');
+        router.replace('/home');
       }
     };
 

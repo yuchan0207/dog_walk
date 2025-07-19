@@ -9,7 +9,12 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "이 앱은 카메라를 사용하여 강아지 사진을 촬영합니다.",
+        "NSPhotoLibraryUsageDescription": "이 앱은 사진을 선택하여 강아지 사진을 업로드합니다.",
+        "NSLocationWhenInUseUsageDescription": "이 앱은 사용자의 현재 위치를 사용하여 강아지를 지도에 표시합니다."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -38,7 +43,6 @@
     "experiments": {
       "typedRoutes": true
     },
-
     "extra": {
       "EXPO_PUBLIC_SUPABASE_URL": "https://nspnyhnadqlhcucbtugx.supabase.co",
       "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zcG55aG5hZHFsaGN1Y2J0dWd4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEwODk2OTksImV4cCI6MjA2NjY2NTY5OX0.1k5sXN_X_AGxXVswiVv5iwP3WKvTp_AsrD1U96AxxM8"

@@ -13,19 +13,20 @@ import {
   View,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
-import { supabase } from '../lib/supabase';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { supabase } from '../../lib/supabase';
 
 type DogLocation = {
   id: string;
-  dog_id?: string;
+  dog_id?: string | null;
   user_id: string;
   latitude: number;
   longitude: number;
-  image_url: string;
-  dog_name?: string;
-  breed?: string;
-  age?: string;
-  owner_id: string;
+  image_url: string | null;
+  dog_name?: string | null;
+  breed?: string | null;
+  age?: string | null;
+  owner_id: string | null;
 };
 
 export default function HomeScreen() {
@@ -38,16 +39,13 @@ export default function HomeScreen() {
   const fetchDogs = async () => {
     const { data, error } = await supabase
       .from('locations')
-      .select('id, latitude, longitude, image_url, dog_name, breed, age, owner_id, dog_id, user_id') as unknown as {
-        data: DogLocation[],
-        error: any
-      };
+      .select('id, latitude, longitude, image_url, dog_name, breed, age, owner_id, dog_id, user_id');
 
     if (error) {
       console.error(error);
       Alert.alert('데이터 불러오기 실패', error.message);
     } else {
-      setDogLocations(data);
+      setDogLocations(data as DogLocation[]);
     }
     setLoading(false);
   };
@@ -89,7 +87,7 @@ export default function HomeScreen() {
           text: '삭제하기',
           style: 'destructive',
           onPress: async () => {
-            const imagePath = dog.image_url.split('/').pop();
+            const imagePath = dog.image_url?.split('/').pop();
             if (dog.dog_id) {
               await supabase.from('dog_profiles').delete().eq('id', dog.dog_id);
             }
@@ -139,69 +137,75 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <MapView
-        ref={mapRef}
-        provider={PROVIDER_GOOGLE}
-        style={styles.map}
-        region={region}
-        showsUserLocation
-      >
-        {dogLocations.map((dog, index) => {
-          const offset = 0.0001 * index;
-          const coordinate = {
-            latitude: dog.latitude + offset,
-            longitude: dog.longitude + offset,
-          };
-
-          const scale = 0.01 / region.latitudeDelta;
-          const imageSize = Math.min(Math.max(scale * 50, 40), 90);
-
-          return (
-            <Marker key={dog.id} coordinate={coordinate} onPress={() => handleMarkerPress(dog)}>
-              <View
-                style={{
-                  width: imageSize,
-                  height: imageSize,
-                  borderRadius: imageSize / 2,
-                  backgroundColor: '#fff',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  overflow: 'hidden',
-                  borderWidth: 2,
-                  borderColor: '#FF7043',
-                }}
-              >
-                <Image
-                  source={{ uri: dog.image_url }}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    borderRadius: imageSize / 2,
-                  }}
-                />
-              </View>
-            </Marker>
-          );
-        })}
-      </MapView>
-
-      <TouchableOpacity style={styles.myLocationButton} onPress={moveToMyLocation}>
-        <Text style={styles.myLocationText}>내 위치</Text>
-      </TouchableOpacity>
-
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.button} onPress={() => router.push('/upload')}>
-          <Text style={styles.buttonText}>강아지 업로드</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.button, { backgroundColor: '#6FCF97' }]}
-          onPress={() => router.push('/walk_requests')}
+    <SafeAreaView style={{ flex: 1 }}>
+      <View style={styles.container}>
+        <MapView
+          ref={mapRef}
+          provider={PROVIDER_GOOGLE}
+          style={styles.map}
+          region={region}
+          showsUserLocation
         >
-          <Text style={styles.buttonText}>산책 신청함</Text>
+          {dogLocations.map((dog, index) => {
+            if (!dog.latitude || !dog.longitude || !dog.image_url) return null;
+
+            const offset = 0.0001 * index;
+            const coordinate = {
+              latitude: dog.latitude + offset,
+              longitude: dog.longitude + offset,
+            };
+
+            const scale = 0.01 / region.latitudeDelta;
+            const imageSize = Math.min(Math.max(scale * 50, 40), 90);
+
+            return (
+              <Marker key={dog.id} coordinate={coordinate} onPress={() => handleMarkerPress(dog)}>
+                <View
+                  style={{
+                    width: imageSize,
+                    height: imageSize,
+                    borderRadius: imageSize / 2,
+                    backgroundColor: '#fff',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    overflow: 'hidden',
+                    borderWidth: 2,
+                    borderColor: '#FF7043',
+                  }}
+                >
+                  <Image
+                    source={{ uri: dog.image_url }}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: imageSize / 2,
+                    }}
+                  />
+                </View>
+              </Marker>
+            );
+          })}
+        </MapView>
+
+        {/* 내 위치 버튼 */}
+        <TouchableOpacity style={styles.myLocationButton} onPress={moveToMyLocation}>
+          <Text style={styles.myLocationText}>내 위치</Text>
         </TouchableOpacity>
+
+        {/* 하단 버튼 */}
+        <View style={styles.bottomButtonContainer}>
+          <TouchableOpacity style={styles.bottomButton} onPress={() => router.push('/upload')}>
+            <Text style={styles.bottomButtonText}>강아지 업로드</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.bottomButton, { backgroundColor: '#6FCF97' }]}
+            onPress={() => router.push('/set_home')}
+          >
+            <Text style={styles.bottomButtonText}>집 위치 설정</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -209,32 +213,45 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  buttonContainer: {
-    position: 'absolute',
-    bottom: 40,
-    width: '100%',
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  button: {
-    backgroundColor: '#FF7043',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 16,
-    elevation: 3,
-  },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+
   myLocationButton: {
     position: 'absolute',
     right: 20,
-    bottom: 100,
+    bottom: 160,
     backgroundColor: '#fff',
-    padding: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#ccc',
     elevation: 2,
   },
-  myLocationText: { fontSize: 14, fontWeight: '500' },
+  myLocationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+
+  bottomButtonContainer: {
+    position: 'absolute',
+    bottom: 65,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  bottomButton: {
+    flex: 1,
+    backgroundColor: '#FF7043',
+    paddingVertical: 14,
+    marginHorizontal: 5,
+    borderRadius: 20,
+    alignItems: 'center',
+    elevation: 3,
+  },
+  bottomButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
 });

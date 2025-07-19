@@ -35,6 +35,56 @@ export type Database = {
         }
         Relationships: []
       }
+      dog_histories: {
+        Row: {
+          age: string | null
+          breed: string | null
+          created_at: string | null
+          dog_id: string
+          gender: string | null
+          hobbies: string | null
+          id: string
+          image_url: string | null
+          name: string | null
+          owner_id: string | null
+          personality: string | null
+        }
+        Insert: {
+          age?: string | null
+          breed?: string | null
+          created_at?: string | null
+          dog_id: string
+          gender?: string | null
+          hobbies?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string | null
+          owner_id?: string | null
+          personality?: string | null
+        }
+        Update: {
+          age?: string | null
+          breed?: string | null
+          created_at?: string | null
+          dog_id?: string
+          gender?: string | null
+          hobbies?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string | null
+          owner_id?: string | null
+          personality?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dog_histories_dog_id_fkey"
+            columns: ["dog_id"]
+            isOneToOne: false
+            referencedRelation: "dog_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dog_images: {
         Row: {
           dog_id: string

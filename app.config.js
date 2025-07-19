@@ -46,8 +46,10 @@ export default {
     extra: {
       EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
       EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+      EXPO_PUBLIC_DOG_API_KEY: process.env.EXPO_PUBLIC_DOG_API_KEY, // ⬅ 이거 추가!
     },
+
     runtimeVersion: {
       policy: "sdkVersion"
     },
