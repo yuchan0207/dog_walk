@@ -81,31 +81,7 @@ export default function HomeScreen() {
     if (!currentUserId) return;
 
     if (currentUserId === dog.owner_id) {
-      Alert.alert('강아지 관리', '어떤 작업을 하시겠습니까?', [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '삭제하기',
-          style: 'destructive',
-          onPress: async () => {
-            const imagePath = dog.image_url?.split('/').pop();
-            if (dog.dog_id) {
-              await supabase.from('dog_profiles').delete().eq('id', dog.dog_id);
-            }
-            await supabase.from('locations').delete().eq('id', dog.id);
-            if (imagePath) {
-              await supabase.storage.from('dog-images').remove([imagePath]);
-            }
-            Alert.alert('삭제 완료', '강아지가 삭제되었습니다.');
-            fetchDogs();
-          },
-        },
-        {
-          text: '갱신하기',
-          onPress: () => {
-            router.push({ pathname: '/upload', params: { updateId: dog.id } });
-          },
-        },
-      ]);
+      return;
     } else {
       if (dog.dog_id) {
         router.push({ pathname: '/view', params: { dogId: dog.dog_id } });
@@ -170,7 +146,7 @@ export default function HomeScreen() {
                     alignItems: 'center',
                     overflow: 'hidden',
                     borderWidth: 2,
-                    borderColor: '#FF7043',
+                    borderColor: dog.owner_id === currentUserId ? '#42A5F5' : '#FF7043', // ✅ 내 강아지면 파란색
                   }}
                 >
                   <Image

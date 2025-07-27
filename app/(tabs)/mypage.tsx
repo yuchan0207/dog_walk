@@ -14,16 +14,30 @@ import {
   View,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
+import { Database } from '../../types/supabase';
+
+type Profile = Database['public']['Tables']['profiles']['Row'];
+
+type DogProfile = {
+  id: string;
+  name: string;
+  breed: string;
+  age: number;
+  image_url: string;
+  owner_id: string;
+  gender: string;
+};
 
 export default function MyPage() {
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<any>(null);
-  const [dogs, setDogs] = useState<any[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [dogs, setDogs] = useState<DogProfile[]>([]);
   const [editMode, setEditMode] = useState(false);
 
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('');
+
   const router = useRouter();
 
   useEffect(() => {
@@ -32,27 +46,37 @@ export default function MyPage() {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser();
+
       if (userError || !user) {
         Alert.alert('오류', '로그인이 필요합니다.');
         return;
       }
 
-      const { data: profileData } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .single<Profile>();
 
-      const { data: dogList } = await supabase
+      const { data: dogList, error: dogError } = await supabase
         .from('dog_profiles')
         .select('*')
         .eq('owner_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .returns<DogProfile[]>();
 
-      setProfile(profileData);
-      setName(profileData?.name ?? '');
-      setAge(profileData?.age?.toString() ?? '');
-      setGender(profileData?.gender ?? '');
+      if (profileError || dogError) {
+        Alert.alert('데이터 불러오기 실패');
+        return;
+      }
+
+      if (profileData) {
+        setProfile(profileData);
+        setName(profileData.name ?? '');
+        setAge(profileData.age?.toString() ?? '');
+        setGender(profileData.gender ?? '');
+      }
+
       setDogs(dogList ?? []);
       setLoading(false);
     })();
@@ -99,6 +123,18 @@ export default function MyPage() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>👤 내 정보</Text>
 
+      <TouchableOpacity
+        style={{ position: 'absolute', top: 80, right: 24 }}
+        onPress={async () => {
+          await supabase.auth.signOut();
+          Alert.alert('로그아웃 되었습니다');
+          router.replace('/login'); // 또는 초기 화면 경로
+        }}
+      >
+        <Text style={{ color: '#FF7043', fontWeight: '600' }}>로그아웃</Text>
+      </TouchableOpacity>
+
+
       <View style={styles.section}>
         <Text style={styles.label}>이름</Text>
         <TextInput
@@ -144,9 +180,18 @@ export default function MyPage() {
             <Image source={{ uri: dog.image_url }} style={styles.dogImage} />
             <View style={{ flex: 1 }}>
               <Text style={styles.dogName}>{dog.name}</Text>
-              <Text>{dog.breed} / {dog.age}살</Text>
+              <Text>
+                {dog.breed} / {dog.age}살
+              </Text>
               <TouchableOpacity
-                onPress={() => router.push({ pathname: '/view', params: { dogId: dog.id } })}
+                onPress={() =>
+                  router.push({
+                    pathname: '/view',
+                    params: {
+                      dogId: dog.id,
+                    },
+                  })
+                }
               >
                 <Text style={styles.link}>상세 보기 →</Text>
               </TouchableOpacity>
@@ -160,7 +205,7 @@ export default function MyPage() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 80, // 위로 더 내림
+    paddingTop: 80,
     padding: 24,
     backgroundColor: '#fff',
   },
@@ -230,5 +275,9 @@ const styles = StyleSheet.create({
     color: '#FF7043',
     fontWeight: '600',
   },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });

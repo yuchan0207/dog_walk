@@ -35,20 +35,73 @@ export type Database = {
         }
         Relationships: []
       }
+      dog_histories: {
+        Row: {
+          age: string | null
+          breed: string | null
+          created_at: string | null
+          dog_id: string
+          gender: string | null
+          hobbies: string | null
+          id: string
+          image_url: string | null
+          name: string | null
+          owner_id: string | null
+          personality: string | null
+        }
+        Insert: {
+          age?: string | null
+          breed?: string | null
+          created_at?: string | null
+          dog_id: string
+          gender?: string | null
+          hobbies?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string | null
+          owner_id?: string | null
+          personality?: string | null
+        }
+        Update: {
+          age?: string | null
+          breed?: string | null
+          created_at?: string | null
+          dog_id?: string
+          gender?: string | null
+          hobbies?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string | null
+          owner_id?: string | null
+          personality?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dog_histories_dog_id_fkey"
+            columns: ["dog_id"]
+            isOneToOne: false
+            referencedRelation: "dog_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dog_images: {
         Row: {
+          category: string | null
           dog_id: string
           id: string
           image_url: string | null
           uploaded_at: string | null
         }
         Insert: {
+          category?: string | null
           dog_id: string
           id?: string
           image_url?: string | null
           uploaded_at?: string | null
         }
         Update: {
+          category?: string | null
           dog_id?: string
           id?: string
           image_url?: string | null
@@ -71,12 +124,13 @@ export type Database = {
           created_at: string | null
           dog_id: string | null
           gender: string | null
-          hobbies: string | null
+          hobbies: string[] | null
           id: string
           image_url: string | null
           name: string | null
           owner_id: string
-          personality: string | null
+          personality: string[] | null
+          updated_at: string | null
         }
         Insert: {
           age?: number | null
@@ -84,12 +138,13 @@ export type Database = {
           created_at?: string | null
           dog_id?: string | null
           gender?: string | null
-          hobbies?: string | null
+          hobbies?: string[] | null
           id?: string
           image_url?: string | null
           name?: string | null
           owner_id?: string
-          personality?: string | null
+          personality?: string[] | null
+          updated_at?: string | null
         }
         Update: {
           age?: number | null
@@ -97,12 +152,13 @@ export type Database = {
           created_at?: string | null
           dog_id?: string | null
           gender?: string | null
-          hobbies?: string | null
+          hobbies?: string[] | null
           id?: string
           image_url?: string | null
           name?: string | null
           owner_id?: string
-          personality?: string | null
+          personality?: string[] | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -115,6 +171,7 @@ export type Database = {
           dog_name: string | null
           id: string
           image_url: string | null
+          is_home: boolean | null
           latitude: number
           longitude: number | null
           owner_id: string | null
@@ -129,6 +186,7 @@ export type Database = {
           dog_name?: string | null
           id?: string
           image_url?: string | null
+          is_home?: boolean | null
           latitude: number
           longitude?: number | null
           owner_id?: string | null
@@ -143,6 +201,7 @@ export type Database = {
           dog_name?: string | null
           id?: string
           image_url?: string | null
+          is_home?: boolean | null
           latitude?: number
           longitude?: number | null
           owner_id?: string | null
@@ -177,21 +236,30 @@ export type Database = {
       }
       profiles: {
         Row: {
+          age: number | null
           created_at: string | null
           email: string | null
+          gender: string | null
           id: string
+          name: string | null
           username: string | null
         }
         Insert: {
+          age?: number | null
           created_at?: string | null
           email?: string | null
+          gender?: string | null
           id?: string
+          name?: string | null
           username?: string | null
         }
         Update: {
+          age?: number | null
           created_at?: string | null
           email?: string | null
+          gender?: string | null
           id?: string
+          name?: string | null
           username?: string | null
         }
         Relationships: []

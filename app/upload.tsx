@@ -1,9 +1,9 @@
-// app/upload.tsx
 'use client';
 
+import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -22,6 +22,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import 'react-native-url-polyfill/auto';
 import { supabase } from '../lib/supabase';
 
 const initialBreeds = [
@@ -38,48 +39,64 @@ const initialBreeds = [
 const genders = ['수컷', '암컷'];
 
 export default function UploadScreen() {
-  const [name, setName] = useState('');
-  const [age, setAge] = useState('');
-  const [gender, setGender] = useState('');
-  const [breedInput, setBreedInput] = useState('');
+  const params = useLocalSearchParams();
+  const isEdit = params.mode === 'edit' || params.edit === '1';
+  const dogId = params.dogId as string | undefined;
+
+  const [name, setName] = useState(params.name as string || '');
+  const [age, setAge] = useState(params.age as string || '');
+  const [gender, setGender] = useState(params.gender as string || '');
+  const [breedInput, setBreedInput] = useState(params.breed as string || '');
   const [breeds, setBreeds] = useState(initialBreeds);
   const [filteredBreeds, setFilteredBreeds] = useState<string[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedBreed, setSelectedBreed] = useState('');
+  const [selectedBreed, setSelectedBreed] = useState(params.breed as string || '');
   const [customBreed, setCustomBreed] = useState('');
   const [customBreedMode, setCustomBreedMode] = useState(false);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>((params.imageUrl as string) || null);
   const [uploading, setUploading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [pendingCustomBreeds, setPendingCustomBreeds] = useState<string[]>([]);
+
+  const breedInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
   }, []);
 
   useEffect(() => {
+    if (customBreedMode) {
+      setShowDropdown(false);
+      return;
+    }
+
     const matches = breeds.filter((b) => b.startsWith(breedInput));
-    const custom = breedInput.length > 0 ? ['기타'] : [];
-    setFilteredBreeds([...matches, ...custom]);
-    setShowDropdown(breedInput.length > 0);
-  }, [breedInput, breeds]);
+    const shouldShowCustom =
+      matches.length === 0 &&
+      breedInput.length > 0 &&
+      !pendingCustomBreeds.includes(breedInput) &&
+      !breeds.includes(breedInput);
+
+    setFilteredBreeds([...matches, ...(shouldShowCustom ? ['기타'] : [])]);
+    setShowDropdown((matches.length > 0 || shouldShowCustom) && breedInput.length > 0);
+  }, [breedInput, breeds, customBreedMode, pendingCustomBreeds]);
 
   const handleBreedSelect = (breed: string) => {
     if (breed === '기타') {
+      setSelectedBreed('기타');
+      setBreedInput('기타');
       setCustomBreedMode(true);
-      setShowDropdown(false);
+      breedInputRef.current?.blur();
     } else {
       setBreedInput(breed);
-      setSelectedBreed(breed);  // 이 줄이 있어야 한 번에 선택됨
-      setShowDropdown(false);
+      setSelectedBreed(breed);
       setCustomBreedMode(false);
+      setTimeout(() => {
+        setShowDropdown(false);
+        breedInputRef.current?.blur();
+      }, 50);
     }
-  };
-
-
-  const handleRemoveCustomBreed = (breed: string) => {
-    setPendingCustomBreeds(pendingCustomBreeds.filter((b) => b !== breed));
   };
 
   const pickFromGallery = async () => {
@@ -115,35 +132,111 @@ export default function UploadScreen() {
     }
   };
 
+  const uploadBase64ToSupabase = async (base64Uri: string, fileName: string) => {
+    const base64Data = base64Uri.split(',')[1];
+    const buffer = decode(base64Data);
+
+    const { data, error } = await supabase.storage
+      .from('dog-images')
+      .upload(fileName, buffer, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
+
+    if (error) throw error;
+
+    const { data: publicUrl } = supabase.storage.from('dog-images').getPublicUrl(fileName);
+    return publicUrl.publicUrl;
+  };
+
   const uploadDog = async () => {
+    if (!user?.id) {
+      return Alert.alert('로그인 정보를 불러올 수 없습니다. 다시 시도해주세요.');
+    }
+
     if (!name || !selectedBreed || !age || !gender || !imageUrl) {
       return Alert.alert('모든 필수 정보를 입력해주세요.');
     }
+
     setUploading(true);
 
-    const { data: insertData, error } = await supabase
+    if (customBreedMode && customBreed.trim()) {
+      setSelectedBreed(customBreed);
+      setBreedInput(customBreed);
+      setPendingCustomBreeds((prev) => [...prev, customBreed]);
+    }
+
+    if (!breeds.includes(selectedBreed)) {
+      setBreeds((prev) => [...prev, selectedBreed]);
+    }
+
+    let uploadedImageUrl = '';
+    try {
+      uploadedImageUrl = await uploadBase64ToSupabase(imageUrl, `${user.id}_${Date.now()}.jpg`);
+    } catch (e) {
+      console.error('이미지 업로드 에러:', e);
+      setUploading(false);
+      return Alert.alert('이미지 업로드 실패', '다시 시도해주세요.');
+    }
+
+    setImageUrl(uploadedImageUrl);
+
+    if (isEdit && dogId) {
+      const { error } = await supabase
+        .from('dog_profiles')
+        .update({
+          name,
+          breed: selectedBreed,
+          age: parseInt(age),
+          gender,
+          image_url: uploadedImageUrl,
+        })
+        .eq('id', dogId);
+
+      if (error) {
+        setUploading(false);
+        return Alert.alert('수정 실패', error.message);
+      }
+
+      await supabase
+        .from('locations')
+        .update({
+          image_url: uploadedImageUrl,
+          dog_name: name,
+          breed: selectedBreed,
+          age: age,
+        })
+        .eq('dog_id', dogId);
+
+      Alert.alert('수정 완료', '강아지 정보가 수정되었습니다.');
+      setUploading(false);
+      return router.push('/');
+    }
+
+    const { error: insertError, data } = await supabase
       .from('dog_profiles')
       .insert({
-        owner_id: user?.id,
+        owner_id: user.id,
         name,
         breed: selectedBreed,
         age: parseInt(age),
         gender,
-        image_url: imageUrl,
+        image_url: uploadedImageUrl,
       })
-      .select()
+      .select('id')
       .single();
 
-    if (error || !insertData) {
+    if (insertError || !data) {
       setUploading(false);
-      return Alert.alert('등록 실패', error?.message ?? '에러 발생');
+      return Alert.alert('등록 실패', insertError?.message ?? '알 수 없는 오류');
     }
 
-    // ✅ 내 집 위치 불러오기
+    const newDogId = data.id;
+
     const { data: homeData, error: homeError } = await supabase
       .from('user_home_locations')
       .select('latitude, longitude')
-      .eq('user_id', user?.id)
+      .eq('user_id', user.id)
       .single();
 
     if (homeError || !homeData) {
@@ -152,26 +245,58 @@ export default function UploadScreen() {
     }
 
     await supabase.from('locations').insert({
-      user_id: user?.id,
-      owner_id: user?.id,
-      dog_id: insertData.id,
+      user_id: user.id,
+      owner_id: user.id,
+      dog_id: newDogId,
       latitude: homeData.latitude,
       longitude: homeData.longitude,
-      image_url: imageUrl,
+      image_url: uploadedImageUrl,
       dog_name: name,
       breed: selectedBreed,
       age,
-    });
+    },);
 
-    await supabase.from('dog_images').insert({
-      dog_id: insertData.id,
-      image_url: imageUrl,
-    });
+    console.log("🔥 user.id 확인:", user.id);
+
+    const { data: dogImageData, error: imageInsertError } = await supabase
+      .from('dog_images')
+      .insert([
+        {
+          dog_id: newDogId,
+          image_url: uploadedImageUrl,
+          uploaded_at: new Date().toISOString(),
+          user_id: user.id, // ✅ 꼭 있어야 RLS 통과
+        }
+      ])
+      .select();
+
+    console.log("🔥 user.id 확인:", user.id);
+
+    if (imageInsertError) {
+      console.error('❌ dog_images insert 실패:', imageInsertError.message);
+    } else if (!dogImageData || dogImageData.length === 0) {
+      console.error('❗ dog_images insert 반환 없음');
+    } else {
+      console.log('✅ dog_images insert 성공:', dogImageData);
+    }
+
 
     Alert.alert('등록 완료', '강아지 정보가 등록되었습니다.');
     setUploading(false);
     router.push('/');
   };
+
+  const handleRemoveCustomBreed = (b: string) => {
+    setPendingCustomBreeds(prev => prev.filter(item => item !== b));
+
+    if (breedInput === b) setBreedInput('');
+    if (selectedBreed === b) setSelectedBreed('');
+    if (customBreed === b) setCustomBreed('');
+    setCustomBreedMode(false);
+    setShowDropdown(false);
+  };
+
+
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF8F0' }}>
@@ -179,6 +304,9 @@ export default function UploadScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
             <Text style={styles.title}>🐶 강아지 등록</Text>
+            <TouchableOpacity onPress={() => router.back()} style={{ marginBottom: 10 }}>
+              <Text style={{ color: '#FF7043', fontWeight: '600' }}>{'← 돌아가기'}</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.imagePicker}>
               {imageUrl ? (
@@ -209,6 +337,7 @@ export default function UploadScreen() {
 
             <Text style={styles.label}>견종</Text>
             <TextInput
+              ref={breedInputRef}
               value={breedInput}
               onChangeText={setBreedInput}
               placeholder="견종 입력"
@@ -246,6 +375,8 @@ export default function UploadScreen() {
                       setPendingCustomBreeds([...pendingCustomBreeds, customBreed]);
                       setCustomBreed('');
                       setCustomBreedMode(false);
+                      setShowDropdown(false);
+                      breedInputRef.current?.blur();
                     }
                   }}
                   style={styles.uploadButton}
@@ -268,6 +399,7 @@ export default function UploadScreen() {
                 ))}
               </View>
             )}
+
 
             <Text style={styles.label}>성별</Text>
             <View style={styles.optionsContainer}>
@@ -296,7 +428,9 @@ export default function UploadScreen() {
               disabled={uploading}
               style={[styles.uploadButton, uploading && { opacity: 0.5 }]}
             >
-              <Text style={styles.uploadText}>{uploading ? '업로드 중...' : '등록하기'}</Text>
+              <Text style={styles.uploadText}>
+                {uploading ? '업로드 중...' : isEdit ? '수정하기' : '등록하기'}
+              </Text>
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
