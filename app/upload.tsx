@@ -1,5 +1,6 @@
 'use client';
 
+import Slider from '@react-native-community/slider';
 import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -44,7 +45,7 @@ export default function UploadScreen() {
   const dogId = params.dogId as string | undefined;
 
   const [name, setName] = useState(params.name as string || '');
-  const [age, setAge] = useState(params.age as string || '');
+  const [age, setAge] = useState(params.age ? parseInt(params.age as string) : 1);
   const [gender, setGender] = useState(params.gender as string || '');
   const [breedInput, setBreedInput] = useState(params.breed as string || '');
   const [breeds, setBreeds] = useState(initialBreeds);
@@ -71,15 +72,29 @@ export default function UploadScreen() {
       return;
     }
 
-    const matches = breeds.filter((b) => b.startsWith(breedInput));
-    const shouldShowCustom =
-      matches.length === 0 &&
-      breedInput.length > 0 &&
-      !pendingCustomBreeds.includes(breedInput) &&
-      !breeds.includes(breedInput);
+    const trimmedInput = (breedInput ?? '').trim();
 
-    setFilteredBreeds([...matches, ...(shouldShowCustom ? ['기타'] : [])]);
-    setShowDropdown((matches.length > 0 || shouldShowCustom) && breedInput.length > 0);
+    if (trimmedInput.length === 0) {
+      setShowDropdown(false); // 입력 없으면 드롭다운 숨김
+      return;
+    }
+
+    const matches = breeds.filter((b) =>
+      b.toLowerCase().startsWith(trimmedInput.toLowerCase())
+    );
+
+    const showCustom =
+      !pendingCustomBreeds.includes(trimmedInput) &&
+      !breeds.includes(trimmedInput);
+
+    const newFiltered = [...matches];
+
+    if (showCustom) {
+      newFiltered.push('기타'); // 항상 기타 추가 (중복 방지됨)
+    }
+
+    setFilteredBreeds(newFiltered);
+    setShowDropdown(newFiltered.length > 0);
   }, [breedInput, breeds, customBreedMode, pendingCustomBreeds]);
 
   const handleBreedSelect = (breed: string) => {
@@ -150,8 +165,13 @@ export default function UploadScreen() {
   };
 
   const uploadDog = async () => {
-    if (!user?.id) {
-      return Alert.alert('로그인 정보를 불러올 수 없습니다. 다시 시도해주세요.');
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return Alert.alert('로그인 정보 불러오기 실패', '다시 로그인해주세요.');
     }
 
     if (!name || !selectedBreed || !age || !gender || !imageUrl) {
@@ -187,7 +207,7 @@ export default function UploadScreen() {
         .update({
           name,
           breed: selectedBreed,
-          age: parseInt(age),
+          age: age,
           gender,
           image_url: uploadedImageUrl,
         })
@@ -204,7 +224,7 @@ export default function UploadScreen() {
           image_url: uploadedImageUrl,
           dog_name: name,
           breed: selectedBreed,
-          age: age,
+          age: String(age),
         })
         .eq('dog_id', dogId);
 
@@ -219,7 +239,7 @@ export default function UploadScreen() {
         owner_id: user.id,
         name,
         breed: selectedBreed,
-        age: parseInt(age),
+        age: age,
         gender,
         image_url: uploadedImageUrl,
       })
@@ -241,22 +261,31 @@ export default function UploadScreen() {
 
     if (homeError || !homeData) {
       setUploading(false);
-      return Alert.alert('위치 오류', '내 집 위치가 설정되지 않았습니다. 홈 화면에서 먼저 설정해주세요.');
+      return Alert.alert('위치 오류', '내 집 위치가 설정되지 않았습니다. 마이페이지에서 먼저 설정해주세요.');
     }
 
-    await supabase.from('locations').insert({
-      user_id: user.id,
-      owner_id: user.id,
-      dog_id: newDogId,
-      latitude: homeData.latitude,
-      longitude: homeData.longitude,
-      image_url: uploadedImageUrl,
-      dog_name: name,
-      breed: selectedBreed,
-      age,
-    },);
 
     console.log("🔥 user.id 확인:", user.id);
+    const { error: locInsertError } = await supabase
+      .from('locations')
+      .upsert({
+        user_id: user.id,
+        owner_id: user.id,
+        dog_id: newDogId,
+        latitude: homeData.latitude,
+        longitude: homeData.longitude,
+        image_url: uploadedImageUrl,
+        dog_name: name,
+        breed: selectedBreed,
+        age: String(age),
+      }, { onConflict: 'dog_id' });
+
+    if (locInsertError) {
+      console.error('❌ locations upsert 실패:', locInsertError.message);
+      Alert.alert('위치 등록 실패', locInsertError.message);
+      setUploading(false);
+      return;
+    }
 
     const { data: dogImageData, error: imageInsertError } = await supabase
       .from('dog_images')
@@ -414,13 +443,17 @@ export default function UploadScreen() {
               ))}
             </View>
 
-            <Text style={styles.label}>나이</Text>
-            <TextInput
+            <Text style={styles.label}>나이: {age}살</Text>
+            <Slider
+              style={{ width: '100%', height: 40 }}
+              minimumValue={1}
+              maximumValue={25}
+              step={1}
               value={age}
-              onChangeText={setAge}
-              placeholder="숫자만 입력"
-              keyboardType="numeric"
-              style={styles.input}
+              onValueChange={setAge}
+              minimumTrackTintColor="#FF7043"
+              maximumTrackTintColor="#FFDAB9"
+              thumbTintColor="#FF7043"
             />
 
             <TouchableOpacity

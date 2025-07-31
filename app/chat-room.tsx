@@ -1,6 +1,6 @@
-// 파일: app/chat-room/[roomId].tsx
 'use client';
 
+import dayjs from 'dayjs';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -21,13 +21,24 @@ export default function ChatRoomScreen() {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    const getUserId = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUserId(data?.user?.id ?? null);
+    };
+    getUserId();
+  }, []);
 
   useEffect(() => {
     if (roomId) fetchMessages();
   }, [roomId]);
 
   useEffect(() => {
+    if (!roomId) return;
+
     const channel = supabase
       .channel('room-messages')
       .on(
@@ -41,6 +52,14 @@ export default function ChatRoomScreen() {
         (payload) => {
           const newMsg = payload.new;
           setMessages((prev) => [...prev, newMsg]);
+
+          // 읽음 상태 업데이트
+          if (userId && newMsg.sender_id !== userId) {
+            supabase
+              .from('messages')
+              .update({ is_read: true })
+              .eq('id', newMsg.id);
+          }
         }
       )
       .subscribe();
@@ -48,7 +67,7 @@ export default function ChatRoomScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomId]);
+  }, [roomId, userId]);
 
   const fetchMessages = async () => {
     const { data, error } = await supabase
@@ -59,8 +78,24 @@ export default function ChatRoomScreen() {
 
     if (!error) {
       setMessages(data);
+      markMessagesAsRead(data);
     }
     setLoading(false);
+  };
+
+  const markMessagesAsRead = async (msgs: any[]) => {
+    if (!userId) return;
+
+    const unreadIds = msgs
+      .filter((m) => m.sender_id !== userId && !m.is_read)
+      .map((m) => m.id);
+
+    if (unreadIds.length > 0) {
+      await supabase
+        .from('messages')
+        .update({ is_read: true })
+        .in('id', unreadIds);
+    }
   };
 
   const sendMessage = async () => {
@@ -70,20 +105,33 @@ export default function ChatRoomScreen() {
 
     if (!user || !newMessage.trim()) return;
 
-    await supabase.from('messages').insert({
+    const { data, error } = await supabase.from('messages').insert({
       room_id: roomId,
       sender_id: user.id,
       content: newMessage.trim(),
+      is_read: false,
     });
 
-    setNewMessage('');
+    if (!error) {
+      setNewMessage('');
+    }
   };
 
   const renderItem = ({ item }: { item: any }) => {
-    const isMine = item.sender_id === supabase.auth.getUser().data?.user?.id;
+    const isMine = item.sender_id === userId;
+    const timestamp = dayjs(item.created_at).format('YYYY-MM-DD HH:mm');
+
     return (
       <View style={[styles.messageBubble, isMine ? styles.myMessage : styles.theirMessage]}>
         <Text style={styles.messageText}>{item.content}</Text>
+        <View style={styles.messageMeta}>
+          <Text style={styles.metaText}>{timestamp}</Text>
+          {isMine && (
+            <Text style={[styles.metaText, { marginLeft: 6 }]}>
+              {item.is_read ? '읽음' : '안읽음'}
+            </Text>
+          )}
+        </View>
       </View>
     );
   };
@@ -107,7 +155,7 @@ export default function ChatRoomScreen() {
         ref={flatListRef}
         data={messages}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.messagesContainer}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
@@ -154,6 +202,15 @@ const styles = StyleSheet.create({
   messageText: {
     color: '#000',
     fontSize: 16,
+  },
+  messageMeta: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 4,
+  },
+  metaText: {
+    fontSize: 12,
+    color: '#444',
   },
   inputContainer: {
     flexDirection: 'row',

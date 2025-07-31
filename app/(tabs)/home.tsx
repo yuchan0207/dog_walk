@@ -175,9 +175,9 @@ export default function HomeScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.bottomButton, { backgroundColor: '#6FCF97' }]}
-            onPress={() => router.push('/set_home')}
+            onPress={() => router.push('/chat-list')}
           >
-            <Text style={styles.bottomButtonText}>집 위치 설정</Text>
+            <Text style={styles.bottomButtonText}>채팅목록 보러가기</Text>
           </TouchableOpacity>
         </View>
       </View>

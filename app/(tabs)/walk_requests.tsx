@@ -23,6 +23,9 @@ type WalkRequest = {
   created_at: string;
   requester_profile?: {
     username: string;
+    name?: string;
+    age?: number;
+    gender?: string;
   };
 };
 
@@ -52,7 +55,10 @@ export default function WalkRequestsScreen() {
         status,
         created_at,
         requester_profile:from_user_id (
-          username
+          username,
+          name,
+          age,
+          gender
         )
       `)
       .eq('to_user_id', user.id)
@@ -84,13 +90,15 @@ export default function WalkRequestsScreen() {
           params: {
             requestId: item.id,
             dogId: item.dog_id,
-            userId: item.from_user_id, // ✅ 이게 중요해
+            userId: item.from_user_id,
           },
         });
-
       }}
     >
       <Text style={styles.title}>{item.requester_profile?.username || '사용자'}</Text>
+      <Text style={styles.subtext}>이름: {item.requester_profile?.name || '-'}</Text>
+      <Text style={styles.subtext}>나이: {item.requester_profile?.age ?? '-'}</Text>
+      <Text style={styles.subtext}>성별: {item.requester_profile?.gender || '-'}</Text>
       <Text style={styles.subtext}>요청 시간: {new Date(item.created_at).toLocaleString()}</Text>
       <Text style={styles.subtext}>상태: {item.status}</Text>
     </TouchableOpacity>

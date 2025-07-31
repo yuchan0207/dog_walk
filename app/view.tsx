@@ -145,7 +145,7 @@ export default function ViewScreen() {
     const { error } = await supabase.from('walk_requests').insert({
       from_user_id: user.id,
       to_user_id: dog.owner_id,
-      dog_id: myDog.id,
+      dog_id: dog.id,
       status: 'pending',
     });
 
@@ -207,10 +207,16 @@ export default function ViewScreen() {
       <View style={styles.buttonGroup}>
         <TouchableOpacity
           style={[styles.button, { backgroundColor: '#4DB6AC' }]}
-          onPress={() => router.push({ pathname: '/history', params: { dogId: dog.id } })}
+          onPress={() =>
+            router.push({
+              pathname: isMine ? '/history' : '/history-view',
+              params: { dogId: dog.id },
+            })
+          }
         >
           <Text style={styles.buttonText}>📜 일지 보기</Text>
         </TouchableOpacity>
+
 
         {isMine ? (
           <>

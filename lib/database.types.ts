@@ -40,10 +40,10 @@ export type Database = {
           created_at: string | null
           date: string | null
           dog_id: string
+          hashtags: string[] | null
           id: string
-          image_url: string | null
+          image_urls: string[] | null
           memo: string | null
-          name: string | null
           owner_id: string | null
           user_id: string | null
         }
@@ -51,10 +51,10 @@ export type Database = {
           created_at?: string | null
           date?: string | null
           dog_id: string
+          hashtags?: string[] | null
           id?: string
-          image_url?: string | null
+          image_urls?: string[] | null
           memo?: string | null
-          name?: string | null
           owner_id?: string | null
           user_id?: string | null
         }
@@ -62,10 +62,10 @@ export type Database = {
           created_at?: string | null
           date?: string | null
           dog_id?: string
+          hashtags?: string[] | null
           id?: string
-          image_url?: string | null
+          image_urls?: string[] | null
           memo?: string | null
-          name?: string | null
           owner_id?: string | null
           user_id?: string | null
         }
@@ -216,6 +216,7 @@ export type Database = {
           content: string | null
           created_at: string | null
           id: string
+          is_read: boolean | null
           room_id: string
           sender_id: string | null
         }
@@ -223,6 +224,7 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           id?: string
+          is_read?: boolean | null
           room_id: string
           sender_id?: string | null
         }
@@ -230,10 +232,26 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           id?: string
+          is_read?: boolean | null
           room_id?: string
           sender_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_room"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "chat_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_sender"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -322,6 +340,54 @@ export type Database = {
           {
             foreignKeyName: "walk_requests_dog_id_fkey"
             columns: ["dog_id"]
+            isOneToOne: false
+            referencedRelation: "dog_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      walk_schedules: {
+        Row: {
+          created_at: string | null
+          dog_id: string
+          id: string
+          memo: string | null
+          scheduled_at: string
+          status: string
+          target_dog_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          dog_id: string
+          id?: string
+          memo?: string | null
+          scheduled_at: string
+          status?: string
+          target_dog_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          dog_id?: string
+          id?: string
+          memo?: string | null
+          scheduled_at?: string
+          status?: string
+          target_dog_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "walk_schedules_dog_id_fkey"
+            columns: ["dog_id"]
+            isOneToOne: false
+            referencedRelation: "dog_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "walk_schedules_target_dog_id_fkey"
+            columns: ["target_dog_id"]
             isOneToOne: false
             referencedRelation: "dog_profiles"
             referencedColumns: ["id"]

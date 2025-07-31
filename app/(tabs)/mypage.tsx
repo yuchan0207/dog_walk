@@ -1,5 +1,6 @@
 'use client';
 
+import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -35,7 +36,7 @@ export default function MyPage() {
   const [editMode, setEditMode] = useState(false);
 
   const [name, setName] = useState('');
-  const [age, setAge] = useState('');
+  const [age, setAge] = useState(20); // 슬라이더는 숫자
   const [gender, setGender] = useState('');
 
   const router = useRouter();
@@ -73,7 +74,7 @@ export default function MyPage() {
       if (profileData) {
         setProfile(profileData);
         setName(profileData.name ?? '');
-        setAge(profileData.age?.toString() ?? '');
+        setAge(profileData.age ?? 20); // 슬라이더용
         setGender(profileData.gender ?? '');
       }
 
@@ -92,15 +93,9 @@ export default function MyPage() {
       return;
     }
 
-    const numericAge = parseInt(age);
-    if (isNaN(numericAge)) {
-      Alert.alert('나이를 올바르게 입력해주세요.');
-      return;
-    }
-
     const { error } = await supabase
       .from('profiles')
-      .update({ name, age: numericAge, gender })
+      .update({ name, age, gender })
       .eq('id', user.id);
 
     if (error) {
@@ -122,18 +117,32 @@ export default function MyPage() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>👤 내 정보</Text>
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          top: 120,
+          left: 250,
+          backgroundColor: '#FF7043',
+          paddingVertical: 8,
+          paddingHorizontal: 16,
+          borderRadius: 20,
+        }}
+        onPress={() => router.push('/set_home')}
+      >
+        <Text style={{ color: 'white', fontWeight: '600' }}>내 집 위치 정하기</Text>
+      </TouchableOpacity>
+
 
       <TouchableOpacity
         style={{ position: 'absolute', top: 80, right: 24 }}
         onPress={async () => {
           await supabase.auth.signOut();
           Alert.alert('로그아웃 되었습니다');
-          router.replace('/login'); // 또는 초기 화면 경로
+          router.replace('/login');
         }}
       >
         <Text style={{ color: '#FF7043', fontWeight: '600' }}>로그아웃</Text>
       </TouchableOpacity>
-
 
       <View style={styles.section}>
         <Text style={styles.label}>이름</Text>
@@ -145,21 +154,64 @@ export default function MyPage() {
         />
 
         <Text style={styles.label}>나이</Text>
-        <TextInput
-          value={age}
-          onChangeText={setAge}
-          editable={editMode}
-          keyboardType="numeric"
-          style={[styles.input, !editMode && styles.disabledInput]}
-        />
+        {editMode ? (
+          <View style={styles.sliderWrapper}>
+            <Slider
+              style={{ width: '100%' }}
+              minimumValue={1}
+              maximumValue={100}
+              step={1}
+              value={age}
+              onValueChange={setAge}
+              minimumTrackTintColor="#FF7043"
+              maximumTrackTintColor="#ccc"
+              thumbTintColor="#FF7043"
+            />
+            <Text style={styles.sliderValue}>{age}세</Text>
+          </View>
+        ) : (
+          <Text style={[styles.input, styles.disabledInput]}>{age}세</Text>
+        )}
 
         <Text style={styles.label}>성별</Text>
-        <TextInput
-          value={gender}
-          onChangeText={setGender}
-          editable={editMode}
-          style={[styles.input, !editMode && styles.disabledInput]}
-        />
+        {editMode ? (
+          <View style={styles.genderButtons}>
+            <TouchableOpacity
+              style={[
+                styles.genderButton,
+                gender === '남자' && styles.genderSelected,
+              ]}
+              onPress={() => setGender('남자')}
+            >
+              <Text
+                style={[
+                  styles.genderText,
+                  gender === '남자' && styles.genderTextSelected,
+                ]}
+              >
+                남자
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.genderButton,
+                gender === '여자' && styles.genderSelected,
+              ]}
+              onPress={() => setGender('여자')}
+            >
+              <Text
+                style={[
+                  styles.genderText,
+                  gender === '여자' && styles.genderTextSelected,
+                ]}
+              >
+                여자
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <Text style={[styles.input, styles.disabledInput]}>{gender}</Text>
+        )}
 
         <TouchableOpacity
           style={styles.button}
@@ -185,12 +237,7 @@ export default function MyPage() {
               </Text>
               <TouchableOpacity
                 onPress={() =>
-                  router.push({
-                    pathname: '/view',
-                    params: {
-                      dogId: dog.id,
-                    },
-                  })
+                  router.push({ pathname: '/view', params: { dogId: dog.id } })
                 }
               >
                 <Text style={styles.link}>상세 보기 →</Text>
@@ -202,6 +249,7 @@ export default function MyPage() {
     </ScrollView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -235,6 +283,8 @@ const styles = StyleSheet.create({
   disabledInput: {
     backgroundColor: '#f2f2f2',
     color: '#888',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   button: {
     marginTop: 20,
@@ -279,5 +329,40 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  sliderWrapper: {
+    marginTop: 8,
+  },
+  sliderValue: {
+    textAlign: 'center',
+    marginTop: 8,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#555',
+  },
+  genderButtons: {
+    flexDirection: 'row',
+    marginTop: 8,
+    gap: 10,
+  },
+  genderButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  genderSelected: {
+    backgroundColor: '#FF7043',
+    borderColor: '#FF7043',
+  },
+  genderText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  genderTextSelected: {
+    color: '#fff',
   },
 });

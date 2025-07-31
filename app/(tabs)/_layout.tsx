@@ -55,13 +55,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="history"
+        name="schedule"
         options={{
-          title: '일지',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="book.fill" color={color} />,
+          title: '일정',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar" color={color} />,
         }}
       />
-
     </Tabs>
   );
 }

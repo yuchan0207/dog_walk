@@ -1,147 +1,152 @@
 'use client';
 
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import {
-    ActivityIndicator,
-    FlatList,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 
-type ChatRoom = {
-  id: string;
-  user1_id: string;
-  user2_id: string;
-  created_at: string;
-  other_user_name?: string;
-  other_user_id?: string;
-};
-
-export default function ChatListScreen() {
-  const router = useRouter();
-  const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
+export default function ChatList() {
   const [userId, setUserId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [chatRooms, setChatRooms] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchChatRooms();
+    const fetchUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUserId(data?.user?.id ?? null);
+    };
+    fetchUser();
   }, []);
 
+  useEffect(() => {
+    if (userId) fetchChatRooms();
+  }, [userId]);
+
   const fetchChatRooms = async () => {
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) return;
-
-    const currentUserId = user.id;
-    setUserId(currentUserId);
-
-    const { data: rooms, error: roomError } = await supabase
+    const { data: rooms } = await supabase
       .from('chat_rooms')
       .select('*')
-      .or(`user1_id.eq.${currentUserId},user2_id.eq.${currentUserId}`);
+      .or(`user1_id.eq.${userId},user2_id.eq.${userId}`);
 
-    if (roomError || !rooms) return;
+    if (!rooms) return;
 
-    const enrichedRooms = await Promise.all(
-      rooms.map(async (room) => {
-        const otherId = room.user1_id === currentUserId ? room.user2_id : room.user1_id;
-        const { data: otherProfile } = await supabase
-          .from('profiles')
+    const enrichedRooms: any[] = [];
+
+    for (const room of rooms) {
+      const { data: messages } = await supabase
+        .from('messages')
+        .select('content, created_at')
+        .eq('room_id', room.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!messages || messages.length === 0) continue;
+
+      const opponentId = room.user1_id === userId ? room.user2_id : room.user1_id;
+      if (!opponentId) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', opponentId)
+        .single();
+
+
+      const { data: request } = await supabase
+        .from('walk_requests')
+        .select('dog_id')
+        .or(`from_user_id.eq.${userId},to_user_id.eq.${userId}`)
+        .eq('status', 'accepted')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      let dogName = '';
+      if (request?.dog_id) {
+        const { data: dog } = await supabase
+          .from('dog_profiles')
           .select('name')
-          .eq('id', otherId)
+          .eq('id', request.dog_id)
           .single();
 
-        return {
-          ...room,
-          other_user_id: otherId,
-          other_user_name: otherProfile?.name || '알 수 없음',
-        };
-      })
-    );
+        dogName = dog?.name ?? '';
+      }
+
+      enrichedRooms.push({
+        roomId: room.id,
+        lastMessage: messages[0].content,
+        timestamp: messages[0].created_at,
+        opponentName: profile?.name ?? '알 수 없음',
+        dogName: dogName,
+      });
+    }
 
     setChatRooms(enrichedRooms);
-    setLoading(false);
   };
 
-  const handleEnterRoom = (roomId: string, otherUserId: string) => {
-    router.push({
-      pathname: '/chat-room',
-      params: { roomId, partnerId: otherUserId },
-    });
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
+  const renderItem = ({ item }: { item: any }) => (
+    <TouchableOpacity
+      style={styles.roomItem}
+      onPress={() => router.push(`/chat-room/${item.roomId}`)}
+    >
+      <View style={styles.header}>
+        <Text style={styles.opponentName}>{item.opponentName}</Text>
+        <Text style={styles.timestamp}>{new Date(item.timestamp).toLocaleString()}</Text>
       </View>
-    );
-  }
+      <Text style={styles.dogName}>🐶 {item.dogName}</Text>
+      <Text style={styles.message} numberOfLines={1}>
+        💬 {item.lastMessage}
+      </Text>
+    </TouchableOpacity>
+  );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>💬 채팅 목록</Text>
-      {chatRooms.length === 0 ? (
-        <Text style={styles.noChat}>채팅방이 없습니다.</Text>
-      ) : (
-        <FlatList
-          data={chatRooms}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.chatItem}
-              onPress={() => handleEnterRoom(item.id, item.other_user_id!)}
-            >
-              <Text style={styles.chatName}>{item.other_user_name}</Text>
-              <Text style={styles.chatId}>채팅방 ID: {item.id.slice(0, 8)}</Text>
-            </TouchableOpacity>
-          )}
-        />
-      )}
-    </View>
+    <FlatList
+      data={chatRooms}
+      renderItem={renderItem}
+      keyExtractor={(item) => item.roomId}
+      contentContainerStyle={styles.container}
+    />
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 60,
-    paddingHorizontal: 24,
-    backgroundColor: '#fff',
-    flex: 1,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 20,
-  },
-  noChat: {
-    fontSize: 16,
-    color: '#777',
-  },
-  chatItem: {
     padding: 16,
-    backgroundColor: '#FAFAFA',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    backgroundColor: '#FFFAF3',
+    minHeight: '100%',
   },
-  chatName: {
-    fontSize: 18,
-    fontWeight: '600',
+  roomItem: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  chatId: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  opponentName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  timestamp: {
     fontSize: 12,
-    color: '#999',
+    color: '#888',
   },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  dogName: {
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 4,
+  },
+  message: {
+    fontSize: 14,
+    color: '#444',
   },
 });

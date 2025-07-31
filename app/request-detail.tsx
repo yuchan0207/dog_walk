@@ -131,10 +131,14 @@ export default function RequestDogView() {
         <Text style={styles.value}>{dog.gender}</Text>
 
         <Text style={styles.label}>취미</Text>
-        <Text style={styles.value}>{dog.hobbies}</Text>
+        <Text style={styles.value}>
+          {Array.isArray(dog.hobbies) ? dog.hobbies.join(', ') : dog.hobbies}
+        </Text>
 
         <Text style={styles.label}>성격</Text>
-        <Text style={styles.value}>{dog.personality}</Text>
+        <Text style={styles.value}>
+          {Array.isArray(dog.personality) ? dog.personality.join(', ') : dog.personality}
+        </Text>
       </View>
 
       <TouchableOpacity

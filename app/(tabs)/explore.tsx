@@ -149,6 +149,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 20,
     backgroundColor: '#fff',
+    marginTop: 40
   },
   searchInput: {
     marginHorizontal: 20,
