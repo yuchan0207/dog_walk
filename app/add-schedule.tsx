@@ -1,6 +1,7 @@
 'use client';
 
 import DateTimePicker from '@react-native-community/datetimepicker';
+import dayjs from 'dayjs';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -33,11 +34,11 @@ export default function AddScheduleScreen() {
 
     const { error } = await supabase.from('walk_schedules').insert({
       user_id: user.id,
-      dog_id: '', // 필요 시 수정
-      target_dog_id: '', // 필요 시 수정
+      dog_id: null, // 오류 방지
+      target_dog_id: null, // 오류 방지
       memo: title,
-      scheduled_at: date.toISOString(),
-      status,
+      scheduled_at: date.toISOString(), // ISO 문자열로 저장
+      status: status,
     });
 
     if (error) {
@@ -59,8 +60,11 @@ export default function AddScheduleScreen() {
       />
 
       <Text style={styles.label}>날짜 및 시간</Text>
-      <TouchableOpacity onPress={() => setShowPicker(true)} style={styles.pickerButton}>
-        <Text>{date.toLocaleString()}</Text>
+      <TouchableOpacity
+        onPress={() => setShowPicker(true)}
+        style={styles.pickerButton}
+      >
+        <Text>{dayjs(date).format('YYYY-MM-DD HH:mm')}</Text>
       </TouchableOpacity>
       {showPicker && (
         <DateTimePicker
@@ -94,6 +98,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     backgroundColor: '#FFF7F1',
+    paddingTop: 50,
   },
   label: {
     fontSize: 16,

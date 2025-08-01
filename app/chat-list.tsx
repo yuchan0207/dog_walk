@@ -2,7 +2,13 @@
 
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { supabase } from '../lib/supabase';
 
 export default function ChatList() {
@@ -41,15 +47,15 @@ export default function ChatList() {
 
       if (!messages || messages.length === 0) continue;
 
-      const opponentId = room.user1_id === userId ? room.user2_id : room.user1_id;
-      if (!opponentId) return;
+      const opponentId =
+        room.user1_id === userId ? room.user2_id : room.user1_id;
+      if (!opponentId) continue;
 
       const { data: profile } = await supabase
         .from('profiles')
         .select('name')
         .eq('id', opponentId)
         .single();
-
 
       const { data: request } = await supabase
         .from('walk_requests')
@@ -67,17 +73,18 @@ export default function ChatList() {
           .select('name')
           .eq('id', request.dog_id)
           .single();
-
         dogName = dog?.name ?? '';
       }
 
-      enrichedRooms.push({
-        roomId: room.id,
-        lastMessage: messages[0].content,
-        timestamp: messages[0].created_at,
-        opponentName: profile?.name ?? '알 수 없음',
-        dogName: dogName,
-      });
+      if (profile?.name) {
+        enrichedRooms.push({
+          roomId: room.id,
+          lastMessage: messages[0].content,
+          timestamp: messages[0].created_at,
+          opponentName: profile.name,
+          dogName: dogName,
+        });
+      }
     }
 
     setChatRooms(enrichedRooms);
@@ -90,7 +97,9 @@ export default function ChatList() {
     >
       <View style={styles.header}>
         <Text style={styles.opponentName}>{item.opponentName}</Text>
-        <Text style={styles.timestamp}>{new Date(item.timestamp).toLocaleString()}</Text>
+        <Text style={styles.timestamp}>
+          {new Date(item.timestamp).toLocaleString()}
+        </Text>
       </View>
       <Text style={styles.dogName}>🐶 {item.dogName}</Text>
       <Text style={styles.message} numberOfLines={1}>
@@ -100,16 +109,38 @@ export default function ChatList() {
   );
 
   return (
-    <FlatList
-      data={chatRooms}
-      renderItem={renderItem}
-      keyExtractor={(item) => item.roomId}
-      contentContainerStyle={styles.container}
-    />
+    <View style={{ flex: 1 }}>
+      {/* 돌아가기 버튼 */}
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.backText}>← 돌아가기</Text>
+        </TouchableOpacity>
+      </View>
+
+      <FlatList
+        data={chatRooms}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.roomId}
+        contentContainerStyle={styles.container}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  topBar: {
+    paddingTop: 50,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderColor: '#eee',
+  },
+  backText: {
+    fontSize: 16,
+    color: '#FF7043',
+    fontWeight: '600',
+  },
   container: {
     padding: 16,
     backgroundColor: '#FFFAF3',

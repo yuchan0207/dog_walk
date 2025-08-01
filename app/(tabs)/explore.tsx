@@ -1,7 +1,10 @@
+'use client';
+
 import { useUser } from '@supabase/auth-helpers-react';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Image,
   StyleSheet,
@@ -12,7 +15,6 @@ import {
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
-// 타입 정의
 type DogProfile = {
   id: string;
   name: string | null;
@@ -40,6 +42,7 @@ type DogWithDistance = DogWithLocation & {
 export default function ExploreScreen() {
   const user = useUser();
   const router = useRouter();
+
   const [dogsData, setDogsData] = useState<DogProfile[]>([]);
   const [locationsData, setLocationsData] = useState<Location[]>([]);
   const [dogsWithDistance, setDogsWithDistance] = useState<DogWithDistance[]>([]);
@@ -54,64 +57,69 @@ export default function ExploreScreen() {
     const fetchData = async () => {
       if (!user || !user.id) return;
 
-      const { data: homeData } = await supabase
+      // 내 집 위치 불러오기
+      const { data: homeData, error: homeError } = await supabase
         .from('user_home_locations')
         .select('*')
         .eq('user_id', user.id)
         .single();
 
+      if (homeError || !homeData) {
+        Alert.alert('오류', '내 집 위치가 설정되어 있지 않습니다.');
+        return;
+      }
+
       setHome({
-        latitude: homeData?.latitude ?? null,
-        longitude: homeData?.longitude ?? null,
+        latitude: homeData.latitude ?? null,
+        longitude: homeData.longitude ?? null,
       });
 
+      // 강아지 정보 + 위치
       const { data: dogs } = await supabase.from('dog_profiles').select('*');
       const { data: locations } = await supabase.from('locations').select('*');
 
       setDogsData(dogs ?? []);
-      setLocationsData((locations ?? []) as Location[]);
+      setLocationsData(locations ?? []);
     };
 
     fetchData();
   }, [user]);
 
-
-  // 거리 계산 및 필터링
+  // 거리 계산 + 필터링
   useEffect(() => {
-    const dogsWithLoc = (dogsData as DogWithLocation[]).map(dog => {
-      const loc = locationsData.find(loc => loc.dog_id === dog.id);
+    const dogsWithLoc = dogsData
+      .map((dog) => {
+        const loc = locationsData.find((l) => l.dog_id === dog.id);
 
-      if (
-        !loc ||
-        loc.latitude == null || loc.longitude == null ||
-        home.latitude == null || home.longitude == null
-      ) return null;
+        if (
+          !loc ||
+          loc.latitude == null || loc.longitude == null ||
+          home.latitude == null || home.longitude == null
+        ) return null;
 
-      const distance = getDistance(
-        home.latitude,
-        home.longitude,
-        loc.latitude,
-        loc.longitude
-      );
+        const distance = getDistance(home.latitude, home.longitude, loc.latitude, loc.longitude);
 
-      return { ...dog, location: loc, distance };
-    }).filter(Boolean) as DogWithDistance[];
+        return {
+          ...dog,
+          location: loc,
+          distance,
+        };
+      })
+      .filter(Boolean) as DogWithDistance[];
 
     const filtered = dogsWithLoc
-      .filter(dog => dog.breed?.includes(searchQuery))
+      .filter((dog) => !searchQuery || dog.breed?.includes(searchQuery))
       .sort((a, b) => a.distance - b.distance);
 
     setDogsWithDistance(filtered);
   }, [dogsData, locationsData, searchQuery, home]);
 
-  // 거리 계산 함수 (단순 직선 거리)
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const dx = lat1 - lat2;
     const dy = lon1 - lon2;
     return Math.sqrt(dx * dx + dy * dy) * 100000;
   };
 
-  // 강아지 클릭 시 상세 페이지 이동
   const handlePress = (dogId: string) => {
     router.push(`/view?dogId=${dogId}`);
   };
@@ -130,7 +138,10 @@ export default function ExploreScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.card} onPress={() => handlePress(item.id)}>
-            <Image source={{ uri: item.image_url ?? '' }} style={styles.image} />
+            <Image
+              source={{ uri: item.image_url || 'https://place-puppy.com/100x100' }}
+              style={styles.image}
+            />
             <View style={styles.infoBox}>
               <Text style={styles.name}>{item.name}</Text>
               <Text style={styles.breed}>{item.breed}</Text>
@@ -143,13 +154,12 @@ export default function ExploreScreen() {
   );
 }
 
-// 스타일 정의
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingTop: 20,
     backgroundColor: '#fff',
-    marginTop: 40
+    marginTop: 40,
   },
   searchInput: {
     marginHorizontal: 20,
