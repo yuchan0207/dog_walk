@@ -93,8 +93,10 @@ export default function ExploreScreen() {
 
         if (
           !loc ||
-          loc.latitude == null || loc.longitude == null ||
-          home.latitude == null || home.longitude == null
+          loc.latitude == null ||
+          loc.longitude == null ||
+          home.latitude == null ||
+          home.longitude == null
         ) return null;
 
         const distance = getDistance(home.latitude, home.longitude, loc.latitude, loc.longitude);
@@ -112,6 +114,13 @@ export default function ExploreScreen() {
       .sort((a, b) => a.distance - b.distance);
 
     setDogsWithDistance(filtered);
+
+    // ✅ 디버깅 로그
+    console.log('📦 전체 강아지:', dogsData.length);
+    console.log('📍 위치 정보:', locationsData.length);
+    console.log('🏠 내 집 위치:', home);
+    console.log('🔍 검색어:', searchQuery);
+    console.log('✅ 최종 리스트:', filtered);
   }, [dogsData, locationsData, searchQuery, home]);
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -133,23 +142,29 @@ export default function ExploreScreen() {
         onChangeText={setSearchQuery}
       />
 
-      <FlatList
-        data={dogsWithDistance}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.card} onPress={() => handlePress(item.id)}>
-            <Image
-              source={{ uri: item.image_url || 'https://place-puppy.com/100x100' }}
-              style={styles.image}
-            />
-            <View style={styles.infoBox}>
-              <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.breed}>{item.breed}</Text>
-              <Text style={styles.distance}>{Math.round(item.distance)}m 거리</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-      />
+      {dogsWithDistance.length === 0 ? (
+        <Text style={{ textAlign: 'center', marginTop: 20, color: '#999' }}>
+          검색 결과가 없습니다.
+        </Text>
+      ) : (
+        <FlatList
+          data={dogsWithDistance}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity style={styles.card} onPress={() => handlePress(item.id)}>
+              <Image
+                source={{ uri: item.image_url || 'https://place-puppy.com/100x100' }}
+                style={styles.image}
+              />
+              <View style={styles.infoBox}>
+                <Text style={styles.name}>{item.name}</Text>
+                <Text style={styles.breed}>{item.breed}</Text>
+                <Text style={styles.distance}>{Math.round(item.distance)}m 거리</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      )}
     </View>
   );
 }

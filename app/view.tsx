@@ -80,6 +80,23 @@ export default function ViewScreen() {
   const fetchDogImages = async (dogIdParam: string | string[]) => {
     const id = Array.isArray(dogIdParam) ? dogIdParam[0] : dogIdParam;
 
+    // 1. locations의 대표 이미지 먼저 확인
+    const { data: locationData, error: locationError } = await supabase
+      .from('locations')
+      .select('image_url')
+      .eq('dog_id', id)
+      .single();
+
+    if (locationData?.image_url) {
+      setImages([{
+        id: 'fallback',
+        dog_id: id,
+        image_url: locationData.image_url,
+      }]);
+      return;
+    }
+
+    // 2. 없으면 dog_images에서 가져오기
     const { data: imageData, error: imageError } = await supabase
       .from('dog_images')
       .select('id, dog_id, image_url')
@@ -90,24 +107,6 @@ export default function ViewScreen() {
     if (imageData && imageData.length > 0 && imageData[0].image_url) {
       const cleaned = imageData.filter(img => img.image_url !== null) as DogImage[];
       setImages(cleaned);
-      return;
-    }
-
-
-    const { data: locationData, error: locationError } = await supabase
-      .from('locations')
-      .select('image_url')
-      .eq('dog_id', id)
-      .limit(1);
-
-    if (locationData && locationData.length > 0 && locationData[0].image_url) {
-      setImages([
-        {
-          id: 'fallback',
-          dog_id: id,
-          image_url: locationData[0].image_url,
-        },
-      ]);
       return;
     }
 
@@ -217,7 +216,6 @@ export default function ViewScreen() {
           <Text style={styles.buttonText}>📜 일지 보기</Text>
         </TouchableOpacity>
 
-
         {isMine ? (
           <>
             <TouchableOpacity
@@ -326,12 +324,6 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 20,
     backgroundColor: '#ddd',
-  },
-  imageLabel: {
-    marginTop: 8,
-    fontSize: 13,
-    color: '#999',
-    textAlign: 'center',
   },
   section: {
     marginBottom: 30,

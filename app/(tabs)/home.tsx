@@ -34,6 +34,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [dogLocations, setDogLocations] = useState<DogLocation[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [hasUnread, setHasUnread] = useState(false);
   const mapRef = useRef<MapView | null>(null);
 
   const fetchDogs = async () => {
@@ -48,6 +49,23 @@ export default function HomeScreen() {
       setDogLocations(data as DogLocation[]);
     }
     setLoading(false);
+  };
+
+  const checkUnreadMessages = async () => {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return;
+
+    const { data, error: msgError } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('is_read', false)
+      .neq('sender_id', user.id);
+
+    if (!msgError && data && data.length > 0) {
+      setHasUnread(true);
+    } else {
+      setHasUnread(false);
+    }
   };
 
   useFocusEffect(
@@ -73,6 +91,7 @@ export default function HomeScreen() {
         setRegion(newRegion);
         setCurrentUserId(userData.user?.id ?? null);
         await fetchDogs();
+        await checkUnreadMessages();
       })();
     }, [])
   );
@@ -146,7 +165,7 @@ export default function HomeScreen() {
                     alignItems: 'center',
                     overflow: 'hidden',
                     borderWidth: 2,
-                    borderColor: dog.owner_id === currentUserId ? '#42A5F5' : '#FF7043', // ✅ 내 강아지면 파란색
+                    borderColor: dog.owner_id === currentUserId ? '#42A5F5' : '#FF7043',
                   }}
                 >
                   <Image
@@ -163,12 +182,10 @@ export default function HomeScreen() {
           })}
         </MapView>
 
-        {/* 내 위치 버튼 */}
         <TouchableOpacity style={styles.myLocationButton} onPress={moveToMyLocation}>
           <Text style={styles.myLocationText}>내 위치</Text>
         </TouchableOpacity>
 
-        {/* 하단 버튼 */}
         <View style={styles.bottomButtonContainer}>
           <TouchableOpacity style={styles.bottomButton} onPress={() => router.push('/upload')}>
             <Text style={styles.bottomButtonText}>강아지 업로드</Text>
@@ -177,7 +194,9 @@ export default function HomeScreen() {
             style={[styles.bottomButton, { backgroundColor: '#6FCF97' }]}
             onPress={() => router.push('/chat-list')}
           >
-            <Text style={styles.bottomButtonText}>채팅목록 보러가기</Text>
+            <Text style={styles.bottomButtonText}>
+              채팅목록 보러가기{hasUnread ? ' 🔴' : ''}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

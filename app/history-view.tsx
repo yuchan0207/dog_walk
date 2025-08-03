@@ -4,14 +4,20 @@ import { format } from 'date-fns';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    FlatList,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  FlatList,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { supabase } from '../lib/supabase';
@@ -25,10 +31,18 @@ export default function HistoryViewScreen() {
   const [diaries, setDiaries] = useState<any[]>([]);
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [isMine, setIsMine] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editMemo, setEditMemo] = useState('');
+  const [editHashtags, setEditHashtags] = useState('');
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       setMyUserId(user?.id ?? null);
     })();
   }, []);
@@ -60,98 +74,169 @@ export default function HistoryViewScreen() {
     }
   };
 
-  const handleEdit = (diary: any) => {
-    router.push({
-      pathname: '/history',
-      params: { dogId, editId: diary.id },
-    });
-  };
-
   const handleDelete = async (id: string) => {
     await supabase.from('dog_histories').delete().eq('id', id);
     Alert.alert('삭제 완료', '일지가 삭제되었습니다');
     fetchDiaries();
   };
 
+  const handleEdit = (diary: any) => {
+    setEditingId(diary.id);
+    setEditMemo(diary.memo || '');
+    setEditHashtags((diary.hashtags || []).join(' '));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    await supabase
+      .from('dog_histories')
+      .update({
+        memo: editMemo,
+        hashtags: editHashtags.split(/[#\s]+/).filter(Boolean),
+      })
+      .eq('id', editingId);
+
+    setEditingId(null);
+    setEditMemo('');
+    setEditHashtags('');
+    fetchDiaries();
+    Alert.alert('수정 완료', '일지가 수정되었습니다');
+  };
+
   const filteredDiaries = diaries.filter((d) => d.date === selectedDate);
 
   return (
-    <ScrollView style={styles.container}>
-      {/* 🔙 돌아가기 버튼 */}
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        <Text style={styles.backText}>← 돌아가기</Text>
-      </TouchableOpacity>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0} // ✅ 추가
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}> {/* ✅ 추가 */}
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={{ flexGrow: 1 }} // ✅ 추가
+          keyboardShouldPersistTaps="handled"
+        >
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Text style={styles.backText}>← 돌아가기</Text>
+          </TouchableOpacity>
 
-      <Text style={styles.title}>🐾 강아지 일지 보기</Text>
+          <Text style={styles.title}>🐾 강아지 일지 보기</Text>
 
-      <TouchableOpacity
-        onPress={() => setCalendarOpen(!calendarOpen)}
-        style={styles.calendarToggle}
-      >
-        <Text style={styles.calendarToggleText}>
-          📅 {selectedDate} {calendarOpen ? '▲' : '▼'}
-        </Text>
-      </TouchableOpacity>
+          <TouchableOpacity onPress={() => setCalendarOpen(!calendarOpen)} style={styles.calendarToggle}>
+            <Text style={styles.calendarToggleText}>
+              📅 {selectedDate} {calendarOpen ? '▲' : '▼'}
+            </Text>
+          </TouchableOpacity>
 
-      {calendarOpen && (
-        <Calendar
-          markedDates={{
-            [selectedDate]: {
-              selected: true,
-              marked: true,
-              selectedColor: '#FFA726',
-            },
-          }}
-          onDayPress={(day) => {
-            setSelectedDate(day.dateString);
-            setCalendarOpen(false);
-          }}
-          theme={{
-            backgroundColor: '#FFF8F0',
-            calendarBackground: '#FFF8F0',
-            todayTextColor: '#FF7043',
-            dayTextColor: '#333',
-            textDayFontWeight: '500',
-            textMonthFontWeight: 'bold',
-            textDayFontSize: 16,
-            textMonthFontSize: 18,
-            selectedDayBackgroundColor: '#FFA726',
-            selectedDayTextColor: '#fff',
-          }}
-          style={styles.calendar}
-        />
-      )}
-
-      {filteredDiaries.length === 0 ? (
-        <Text style={styles.noData}>이 날의 일지가 없어요 🐶</Text>
-      ) : (
-        filteredDiaries.map((d) => (
-          <View key={d.id} style={styles.card}>
-            <FlatList
-              horizontal
-              data={d.image_urls}
-              keyExtractor={(u) => u}
-              renderItem={({ item }) => (
-                <Image source={{ uri: item }} style={styles.thumbnail} />
-              )}
+          {calendarOpen && (
+            <Calendar
+              markedDates={{ [selectedDate]: { selected: true, marked: true, selectedColor: '#FFA726' } }}
+              onDayPress={(day) => {
+                setSelectedDate(day.dateString);
+                setCalendarOpen(false);
+              }}
+              theme={{
+                backgroundColor: '#FFF8F0',
+                calendarBackground: '#FFF8F0',
+                todayTextColor: '#FF7043',
+                dayTextColor: '#333',
+                textDayFontWeight: '500',
+                textMonthFontWeight: 'bold',
+                textDayFontSize: 16,
+                textMonthFontSize: 18,
+                selectedDayBackgroundColor: '#FFA726',
+                selectedDayTextColor: '#fff',
+              }}
+              style={styles.calendar}
             />
-            <Text style={styles.hashtags}>#{(d.hashtags || []).join(' #')}</Text>
-            <Text style={styles.memo}>{d.memo}</Text>
+          )}
 
-            {isMine && (
-              <View style={styles.actions}>
-                <TouchableOpacity onPress={() => handleEdit(d)}>
-                  <Text style={{ color: '#42A5F5' }}>수정</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDelete(d.id)}>
-                  <Text style={{ color: 'red' }}>삭제</Text>
-                </TouchableOpacity>
+          {filteredDiaries.length === 0 ? (
+            <Text style={styles.noData}>이 날의 일지가 없어요 🐶</Text>
+          ) : (
+            filteredDiaries.map((d) => (
+              <View key={d.id} style={styles.card}>
+                <FlatList
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  data={d.image_urls}
+                  keyExtractor={(u) => u}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setSelectedImage(item);
+                        setModalVisible(true);
+                      }}
+                    >
+                      <Image source={{ uri: item }} style={styles.thumbnail} />
+                    </TouchableOpacity>
+                  )}
+                />
+                {editingId === d.id ? (
+                  <View style={{ marginTop: 10 }}>
+                    <TextInput
+                      value={editHashtags}
+                      onChangeText={setEditHashtags}
+                      placeholder="#산책 #귀여움"
+                      style={[styles.memo, {
+                        color: '#1E88E5',
+                        backgroundColor: '#fff',
+                        padding: 10,
+                        borderRadius: 10,
+                      }]}
+                      multiline
+                      textAlignVertical="top" // ✅ 텍스트 상단부터 입력
+                    />
+                    <TextInput
+                      value={editMemo}
+                      onChangeText={setEditMemo}
+                      placeholder="메모를 입력하세요"
+                      style={[styles.memo, {
+                        backgroundColor: '#fff',
+                        padding: 10,
+                        borderRadius: 10,
+                        marginTop: 8,
+                      }]}
+                      multiline
+                      textAlignVertical="top" // ✅ 텍스트 상단부터 입력
+                    />
+                    <TouchableOpacity onPress={handleSaveEdit} style={styles.saveButton}> {/* ✅ 버튼 스타일 추가 */}
+                      <Text style={styles.saveButtonText}>💾 저장하기</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={styles.hashtags}>#{(d.hashtags || []).join(' #')}</Text>
+                    <Text style={styles.memo}>{d.memo}</Text>
+                  </View>
+                )}
+                {isMine && editingId !== d.id && (
+                  <View style={styles.actions}>
+                    <TouchableOpacity onPress={() => handleEdit(d)}>
+                      <Text style={{ color: '#42A5F5' }}>수정</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDelete(d.id)}>
+                      <Text style={{ color: 'red' }}>삭제</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
-            )}
-          </View>
-        ))
-      )}
-    </ScrollView>
+            ))
+          )}
+
+          <Modal visible={modalVisible} transparent>
+            <View style={styles.modalContainer}>
+              <Image source={{ uri: selectedImage ?? '' }} style={styles.fullImage} resizeMode="contain" />
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
+                <Text style={styles.closeText}>닫기</Text>
+              </TouchableOpacity>
+            </View>
+          </Modal>
+        </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -160,7 +245,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF8F0',
     padding: 20,
-    paddingTop: 40, // ⬇️ 전체적으로 아래로 내림
+    paddingTop: 40,
   },
   backButton: {
     marginBottom: 10,
@@ -210,15 +295,15 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   thumbnail: {
-    width: 80,
-    height: 80,
+    width: 300,
+    height: 300,
     borderRadius: 12,
     marginRight: 10,
   },
   hashtags: {
-    marginTop: 6,
+    marginTop: 8,
     fontWeight: '600',
-    color: '#666',
+    color: '#1E88E5',
   },
   memo: {
     marginTop: 4,
@@ -228,5 +313,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 10,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullImage: {
+    width: '100%',
+    height: '80%',
+  },
+  closeButton: {
+    marginTop: 20,
+    padding: 10,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+  },
+  closeText: {
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  saveButton: {
+    marginTop: 10,
+    paddingVertical: 12,
+    backgroundColor: '#C8E6C9',
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: '#00796B',
+    fontWeight: 'bold',
   },
 });

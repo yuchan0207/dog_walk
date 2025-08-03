@@ -190,14 +190,18 @@ export default function UploadScreen() {
       setBreeds((prev) => [...prev, selectedBreed]);
     }
 
-    let uploadedImageUrl = '';
-    try {
-      uploadedImageUrl = await uploadBase64ToSupabase(imageUrl, `${user.id}_${Date.now()}.jpg`);
-    } catch (e) {
-      console.error('이미지 업로드 에러:', e);
-      setUploading(false);
-      return Alert.alert('이미지 업로드 실패', '다시 시도해주세요.');
+    let uploadedImageUrl = imageUrl;
+    // base64로 새로 선택한 경우만 업로드 수행
+    if (imageUrl?.startsWith('data:image')) {
+      try {
+        uploadedImageUrl = await uploadBase64ToSupabase(imageUrl, `${user.id}_${Date.now()}.jpg`);
+      } catch (e) {
+        console.error('이미지 업로드 에러:', e);
+        setUploading(false);
+        return Alert.alert('이미지 업로드 실패', '다시 시도해주세요.');
+      }
     }
+
 
     setImageUrl(uploadedImageUrl);
 

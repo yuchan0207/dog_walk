@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -26,6 +27,12 @@ type WalkRequest = {
     name?: string;
     age?: number;
     gender?: string;
+  };
+  dog?: {
+    name: string;
+    breed: string;
+    age: number;
+    image_url: string;
   };
 };
 
@@ -59,6 +66,12 @@ export default function WalkRequestsScreen() {
           name,
           age,
           gender
+        ),
+        dog:dog_id (
+          name,
+          breed,
+          age,
+          image_url
         )
       `)
       .eq('to_user_id', user.id)
@@ -81,28 +94,34 @@ export default function WalkRequestsScreen() {
     }, [])
   );
 
-  const renderItem = ({ item }: { item: WalkRequest }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => {
-        router.push({
-          pathname: '/request-detail-profile',
-          params: {
-            requestId: item.id,
-            dogId: item.dog_id,
-            userId: item.from_user_id,
-          },
-        });
-      }}
-    >
-      <Text style={styles.title}>{item.requester_profile?.username || '사용자'}</Text>
-      <Text style={styles.subtext}>이름: {item.requester_profile?.name || '-'}</Text>
-      <Text style={styles.subtext}>나이: {item.requester_profile?.age ?? '-'}</Text>
-      <Text style={styles.subtext}>성별: {item.requester_profile?.gender || '-'}</Text>
-      <Text style={styles.subtext}>요청 시간: {new Date(item.created_at).toLocaleString()}</Text>
-      <Text style={styles.subtext}>상태: {item.status}</Text>
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item }: { item: WalkRequest }) => {
+    const dog = item.dog;
+    if (!dog) return null;
+
+    return (
+      <TouchableOpacity
+        style={styles.dogItem}
+        onPress={() =>
+          router.push({
+            pathname: '/request-detail-profile',
+            params: {
+              requestId: item.id,
+              dogId: item.dog_id,
+              userId: item.from_user_id,
+            },
+          })
+        }
+      >
+        <Image source={{ uri: dog.image_url }} style={styles.dogImage} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.dogName}>{dog.name}</Text>
+          <Text>{dog.breed} / {dog.age}살</Text>
+          <Text style={styles.subtext}>신청자: {item.requester_profile?.username || '사용자'}</Text>
+          <Text style={styles.link}>상세 보기 →</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -160,27 +179,38 @@ const styles = StyleSheet.create({
     color: '#FF7043',
     marginBottom: 20,
   },
-  card: {
-    backgroundColor: '#fff',
-    padding: 16,
-    marginBottom: 12,
-    borderRadius: 12,
-    elevation: 2,
-    borderLeftWidth: 5,
-    borderLeftColor: '#FF7043',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  subtext: {
-    fontSize: 14,
-    color: '#555',
-  },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  dogItem: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#eee',
+    borderRadius: 10,
+    backgroundColor: '#fff',
+  },
+  dogImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+  },
+  dogName: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  subtext: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#555',
+  },
+  link: {
+    marginTop: 4,
+    color: '#FF7043',
+    fontWeight: '600',
   },
 });
