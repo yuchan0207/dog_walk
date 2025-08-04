@@ -95,30 +95,48 @@ export default function RequestDetailProfile() {
   const router = useRouter();
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [dogs, setDogs] = useState<DogProfile[]>([]);
+  const [dog, setDog] = useState<DogProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      if (!userId || typeof userId !== 'string') return;
+      if (!userId || typeof userId !== 'string' || !requestId || typeof requestId !== 'string') return;
 
+      // 1. 프로필 불러오기
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
-      const { data: dogList } = await supabase
+      // 2. walk_requests에서 my_dog_id를 가져옴
+      const { data: requestData } = await supabase
+        .from('walk_requests')
+        .select('*')
+        .eq('id', requestId)
+        .single();
+
+      if (!requestData) {
+        Alert.alert('신청 정보를 불러올 수 없습니다.');
+        return;
+      }
+      if (!requestData.my_dog_id) {
+        Alert.alert('강아지 정보가 올바르지 않습니다.');
+        return;
+      }
+
+      // 3. 신청자가 보낸 강아지(my_dog_id)로 강아지 정보 불러오기
+      const { data: dogData } = await supabase
         .from('dog_profiles')
         .select('*')
-        .eq('owner_id', userId)
-        .order('created_at', { ascending: false });
+        .eq('id', requestData.my_dog_id)
+        .single();
 
       setProfile(profileData);
-      setDogs(dogList ?? []);
+      setDog(dogData);
       setLoading(false);
     })();
-  }, [userId]);
+  }, [userId, requestId]);
 
   const handleAccept = async () => {
     if (!requestId || typeof requestId !== 'string') return;
@@ -143,7 +161,7 @@ export default function RequestDetailProfile() {
             user2_id: request.to_user_id,
           })
           .select()
-          .single(); // ← room_id를 바로 받기 위해 필요
+          .single();
 
         if (insertError) {
           Alert.alert('채팅방 생성에 실패했습니다.');
@@ -155,7 +173,6 @@ export default function RequestDetailProfile() {
       }
     }
   };
-
 
   const handleReject = async () => {
     if (!requestId || typeof requestId !== 'string') return;
@@ -188,9 +205,9 @@ export default function RequestDetailProfile() {
         <Text style={styles.valueBox}>{profile.gender}</Text>
       </View>
 
-      <Text style={styles.title}>🐶 등록한 강아지</Text>
-      {dogs.map((dog) => (
-        <View key={dog.id} style={styles.dogItem}>
+      <Text style={styles.title}>🐶 신청자가 보낸 강아지</Text>
+      {dog && (
+        <View style={styles.dogItem}>
           <Image source={{ uri: dog.image_url ?? undefined }} style={styles.dogImage} />
 
           <View style={{ flex: 1 }}>
@@ -198,14 +215,14 @@ export default function RequestDetailProfile() {
             <Text>{dog.breed} / {dog.age}살</Text>
             <TouchableOpacity
               onPress={() =>
-                router.push({ pathname: '/request-dog-view', params: { dogId: dog.id, requestId } })
+                router.push({ pathname: '/view', params: { dogId: dog.id, requestId } })
               }
             >
               <Text style={styles.link}>강아지 보기 →</Text>
             </TouchableOpacity>
           </View>
         </View>
-      ))}
+      )}
 
       <View style={styles.buttonRow}>
         <TouchableOpacity style={styles.button} onPress={handleAccept}>

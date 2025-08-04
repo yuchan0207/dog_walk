@@ -109,133 +109,133 @@ export default function HistoryViewScreen() {
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0} // ✅ 추가
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}> {/* ✅ 추가 */}
-        <ScrollView
-          style={styles.container}
-          contentContainerStyle={{ flexGrow: 1 }} // ✅ 추가
-          keyboardShouldPersistTaps="handled"
-        >
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backText}>← 돌아가기</Text>
-          </TouchableOpacity>
+      <View style={{ flex: 1 }}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView
+            style={styles.container}
+            contentContainerStyle={{ flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Text style={styles.backText}>← 돌아가기</Text>
+            </TouchableOpacity>
 
-          <Text style={styles.title}>🐾 강아지 일지 보기</Text>
+            <Text style={styles.title}>🐾 강아지 일지 보기</Text>
 
-          <TouchableOpacity onPress={() => setCalendarOpen(!calendarOpen)} style={styles.calendarToggle}>
-            <Text style={styles.calendarToggleText}>
-              📅 {selectedDate} {calendarOpen ? '▲' : '▼'}
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity onPress={() => setCalendarOpen(!calendarOpen)} style={styles.calendarToggle}>
+              <Text style={styles.calendarToggleText}>
+                📅 {selectedDate} {calendarOpen ? '▲' : '▼'}
+              </Text>
+            </TouchableOpacity>
 
-          {calendarOpen && (
-            <Calendar
-              markedDates={{ [selectedDate]: { selected: true, marked: true, selectedColor: '#FFA726' } }}
-              onDayPress={(day) => {
-                setSelectedDate(day.dateString);
-                setCalendarOpen(false);
-              }}
-              theme={{
-                backgroundColor: '#FFF8F0',
-                calendarBackground: '#FFF8F0',
-                todayTextColor: '#FF7043',
-                dayTextColor: '#333',
-                textDayFontWeight: '500',
-                textMonthFontWeight: 'bold',
-                textDayFontSize: 16,
-                textMonthFontSize: 18,
-                selectedDayBackgroundColor: '#FFA726',
-                selectedDayTextColor: '#fff',
-              }}
-              style={styles.calendar}
-            />
-          )}
+            {calendarOpen && (
+              <Calendar
+                markedDates={{ [selectedDate]: { selected: true, marked: true, selectedColor: '#FFA726' } }}
+                onDayPress={(day) => {
+                  setSelectedDate(day.dateString);
+                  setCalendarOpen(false);
+                }}
+                theme={{
+                  backgroundColor: '#FFF8F0',
+                  calendarBackground: '#FFF8F0',
+                  todayTextColor: '#FF7043',
+                  dayTextColor: '#333',
+                  textDayFontWeight: '500',
+                  textMonthFontWeight: 'bold',
+                  textDayFontSize: 16,
+                  textMonthFontSize: 18,
+                  selectedDayBackgroundColor: '#FFA726',
+                  selectedDayTextColor: '#fff',
+                }}
+                style={styles.calendar}
+              />
+            )}
 
-          {filteredDiaries.length === 0 ? (
-            <Text style={styles.noData}>이 날의 일지가 없어요 🐶</Text>
-          ) : (
-            filteredDiaries.map((d) => (
-              <View key={d.id} style={styles.card}>
-                <FlatList
-                  horizontal
-                  pagingEnabled
-                  showsHorizontalScrollIndicator={false}
-                  data={d.image_urls}
-                  keyExtractor={(u) => u}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setSelectedImage(item);
-                        setModalVisible(true);
-                      }}
-                    >
-                      <Image source={{ uri: item }} style={styles.thumbnail} />
-                    </TouchableOpacity>
+            {filteredDiaries.length === 0 ? (
+              <Text style={styles.noData}>이 날의 일지가 없어요 🐶</Text>
+            ) : (
+              filteredDiaries.map((d) => (
+                <View key={d.id} style={styles.card}>
+                  <FlatList
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    data={d.image_urls}
+                    keyExtractor={(u) => u}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setSelectedImage(item);
+                          setModalVisible(true);
+                        }}
+                      >
+                        <Image source={{ uri: item }} style={styles.thumbnail} />
+                      </TouchableOpacity>
+                    )}
+                  />
+                  {editingId === d.id ? (
+                    <View style={{ marginTop: 10 }}>
+                      <TextInput
+                        value={editHashtags}
+                        onChangeText={setEditHashtags}
+                        placeholder="#산책 #귀여움"
+                        style={[styles.memo, {
+                          color: '#1E88E5',
+                          backgroundColor: '#fff',
+                          padding: 10,
+                          borderRadius: 10,
+                        }]}
+                      />
+                      <TextInput
+                        value={editMemo}
+                        onChangeText={setEditMemo}
+                        placeholder="메모를 입력하세요"
+                        style={[styles.memo, {
+                          backgroundColor: '#fff',
+                          padding: 10,
+                          borderRadius: 10,
+                          marginTop: 8,
+                        }]}
+                        multiline
+                        textAlignVertical="top"
+                      />
+                      <TouchableOpacity onPress={handleSaveEdit} style={styles.saveButton}>
+                        <Text style={styles.saveButtonText}>💾 저장하기</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={styles.hashtags}>#{(d.hashtags || []).join(' #')}</Text>
+                      <Text style={styles.memo}>{d.memo}</Text>
+                    </View>
                   )}
-                />
-                {editingId === d.id ? (
-                  <View style={{ marginTop: 10 }}>
-                    <TextInput
-                      value={editHashtags}
-                      onChangeText={setEditHashtags}
-                      placeholder="#산책 #귀여움"
-                      style={[styles.memo, {
-                        color: '#1E88E5',
-                        backgroundColor: '#fff',
-                        padding: 10,
-                        borderRadius: 10,
-                      }]}
-                      multiline
-                      textAlignVertical="top" // ✅ 텍스트 상단부터 입력
-                    />
-                    <TextInput
-                      value={editMemo}
-                      onChangeText={setEditMemo}
-                      placeholder="메모를 입력하세요"
-                      style={[styles.memo, {
-                        backgroundColor: '#fff',
-                        padding: 10,
-                        borderRadius: 10,
-                        marginTop: 8,
-                      }]}
-                      multiline
-                      textAlignVertical="top" // ✅ 텍스트 상단부터 입력
-                    />
-                    <TouchableOpacity onPress={handleSaveEdit} style={styles.saveButton}> {/* ✅ 버튼 스타일 추가 */}
-                      <Text style={styles.saveButtonText}>💾 저장하기</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={{ marginTop: 10 }}>
-                    <Text style={styles.hashtags}>#{(d.hashtags || []).join(' #')}</Text>
-                    <Text style={styles.memo}>{d.memo}</Text>
-                  </View>
-                )}
-                {isMine && editingId !== d.id && (
-                  <View style={styles.actions}>
-                    <TouchableOpacity onPress={() => handleEdit(d)}>
-                      <Text style={{ color: '#42A5F5' }}>수정</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDelete(d.id)}>
-                      <Text style={{ color: 'red' }}>삭제</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            ))
-          )}
+                  {isMine && editingId !== d.id && (
+                    <View style={styles.actions}>
+                      <TouchableOpacity onPress={() => handleEdit(d)}>
+                        <Text style={{ color: '#42A5F5' }}>수정</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDelete(d.id)}>
+                        <Text style={{ color: 'red' }}>삭제</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
 
-          <Modal visible={modalVisible} transparent>
-            <View style={styles.modalContainer}>
-              <Image source={{ uri: selectedImage ?? '' }} style={styles.fullImage} resizeMode="contain" />
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
-                <Text style={styles.closeText}>닫기</Text>
-              </TouchableOpacity>
-            </View>
-          </Modal>
-        </ScrollView>
-      </TouchableWithoutFeedback>
+            <Modal visible={modalVisible} transparent>
+              <View style={styles.modalContainer}>
+                <Image source={{ uri: selectedImage ?? '' }} style={styles.fullImage} resizeMode="contain" />
+                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
+                  <Text style={styles.closeText}>닫기</Text>
+                </TouchableOpacity>
+              </View>
+            </Modal>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </View>
     </KeyboardAvoidingView>
   );
 }

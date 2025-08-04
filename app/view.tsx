@@ -65,17 +65,21 @@ export default function ViewScreen() {
   const fetchDogInfo = async () => {
     const { data, error } = await supabase
       .from('dog_profiles')
-      .select('*')
+      .select('id, name, breed, age, gender, created_at, owner_id') // 🔥 꼭 owner_id 포함
       .eq('id', dogId)
-      .single<DogProfile>();
+      .single();
+
     if (error || !data) {
       Alert.alert('불러오기 실패', '강아지 정보를 찾을 수 없습니다.');
       router.back();
       return;
     }
+
+    console.log('✅ 불러온 dog 정보:', data); // ⬅ 로그로 확인
     setDog(data);
     setLoading(false);
   };
+
 
   const fetchDogImages = async (dogIdParam: string | string[]) => {
     const id = Array.isArray(dogIdParam) ? dogIdParam[0] : dogIdParam;
@@ -134,19 +138,25 @@ export default function ViewScreen() {
       return;
     }
 
+    // 기존 요청 삭제 (같은 조합으로)
     await supabase
       .from('walk_requests')
       .delete()
       .eq('from_user_id', user.id)
       .eq('to_user_id', dog.owner_id)
-      .eq('dog_id', myDog.id);
+      .eq('my_dog_id', myDog.id)
+      .eq('target_dog_id', dog.id);
 
+    // 새 요청 삽입
     const { error } = await supabase.from('walk_requests').insert({
       from_user_id: user.id,
       to_user_id: dog.owner_id,
-      dog_id: dog.id,
+      my_dog_id: myDog.id,         // ✅ 내가 보낸 강아지
+      target_dog_id: dog.id,       // ✅ 상대 강아지
       status: 'pending',
     });
+
+
 
     if (error) {
       Alert.alert('신청 실패', error.message);

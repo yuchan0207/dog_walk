@@ -307,8 +307,11 @@ export type Database = {
           dog_id: string | null
           from_user_id: string
           id: string
+          is_read: boolean | null
+          my_dog_id: string | null
           owner_id: string | null
           status: string | null
+          target_dog_id: string | null
           to_user_id: string | null
         }
         Insert: {
@@ -316,8 +319,11 @@ export type Database = {
           dog_id?: string | null
           from_user_id?: string
           id?: string
+          is_read?: boolean | null
+          my_dog_id?: string | null
           owner_id?: string | null
           status?: string | null
+          target_dog_id?: string | null
           to_user_id?: string | null
         }
         Update: {
@@ -325,8 +331,11 @@ export type Database = {
           dog_id?: string | null
           from_user_id?: string
           id?: string
+          is_read?: boolean | null
+          my_dog_id?: string | null
           owner_id?: string | null
           status?: string | null
+          target_dog_id?: string | null
           to_user_id?: string | null
         }
         Relationships: [
@@ -344,37 +353,51 @@ export type Database = {
             referencedRelation: "dog_profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "walk_requests_my_dog_id_fkey"
+            columns: ["my_dog_id"]
+            isOneToOne: false
+            referencedRelation: "dog_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "walk_requests_target_dog_id_fkey"
+            columns: ["target_dog_id"]
+            isOneToOne: false
+            referencedRelation: "dog_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       walk_schedules: {
         Row: {
           created_at: string | null
-          dog_id: string
+          dog_id: string | null
           id: string
           memo: string | null
           scheduled_at: string
           status: string
-          target_dog_id: string
+          target_dog_id: string | null
           user_id: string
         }
         Insert: {
           created_at?: string | null
-          dog_id: string
+          dog_id?: string | null
           id?: string
           memo?: string | null
           scheduled_at: string
           status?: string
-          target_dog_id: string
+          target_dog_id?: string | null
           user_id: string
         }
         Update: {
           created_at?: string | null
-          dog_id?: string
+          dog_id?: string | null
           id?: string
           memo?: string | null
           scheduled_at?: string
           status?: string
-          target_dog_id?: string
+          target_dog_id?: string | null
           user_id?: string
         }
         Relationships: [

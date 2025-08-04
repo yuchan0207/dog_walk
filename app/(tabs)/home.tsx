@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
 
   bottomButtonContainer: {
     position: 'absolute',
-    bottom: 65,
+    bottom: 95,
     left: 20,
     right: 20,
     flexDirection: 'row',

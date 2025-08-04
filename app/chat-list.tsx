@@ -3,6 +3,7 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -90,10 +91,55 @@ export default function ChatList() {
     setChatRooms(enrichedRooms);
   };
 
+  const confirmExitRoom = (roomId: string) => {
+    Alert.alert('채팅방 나가기', '정말 이 채팅방에서 나가시겠어요?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '나가기',
+        style: 'destructive',
+        onPress: () => exitChatRoom(roomId),
+      },
+    ]);
+  };
+
+  const exitChatRoom = async (roomId: string) => {
+    if (!userId) return;
+
+    const { data: room } = await supabase
+      .from('chat_rooms')
+      .select('user1_id, user2_id')
+      .eq('id', roomId)
+      .single();
+
+    if (!room) return;
+
+    const updates: any = {};
+    if (room.user1_id === userId) updates.user1_id = null;
+    else if (room.user2_id === userId) updates.user2_id = null;
+
+    await supabase.from('chat_rooms').update(updates).eq('id', roomId);
+
+    // 둘 다 나간 경우 완전 삭제
+    const { data: updated } = await supabase
+      .from('chat_rooms')
+      .select('user1_id, user2_id')
+      .eq('id', roomId)
+      .single();
+
+    if (updated && !updated.user1_id && !updated.user2_id) {
+      await supabase.from('chat_rooms').delete().eq('id', roomId);
+      await supabase.from('messages').delete().eq('room_id', roomId);
+    }
+
+
+    fetchChatRooms(); // 목록 새로고침
+  };
+
   const renderItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={styles.roomItem}
       onPress={() => router.push(`/chat-room/${item.roomId}`)}
+      onLongPress={() => confirmExitRoom(item.roomId)} // ✅ 롱프레스 시 나가기 확인창
     >
       <View style={styles.header}>
         <Text style={styles.opponentName}>{item.opponentName}</Text>

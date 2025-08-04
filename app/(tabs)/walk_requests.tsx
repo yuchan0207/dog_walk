@@ -19,6 +19,8 @@ type WalkRequest = {
   id: string;
   from_user_id: string;
   to_user_id: string;
+  my_dog_id: string;         // ✅ 내가 보낸 강아지 ID
+  target_dog_id: string; 
   dog_id: string;
   status: string;
   created_at: string;
@@ -28,7 +30,7 @@ type WalkRequest = {
     age?: number;
     gender?: string;
   };
-  dog?: {
+  requester_dog?: {
     name: string;
     breed: string;
     age: number;
@@ -55,25 +57,27 @@ export default function WalkRequestsScreen() {
     const { data, error } = await supabase
       .from('walk_requests')
       .select(`
-        id,
-        from_user_id,
-        to_user_id,
-        dog_id,
-        status,
-        created_at,
-        requester_profile:from_user_id (
-          username,
-          name,
-          age,
-          gender
-        ),
-        dog:dog_id (
-          name,
-          breed,
-          age,
-          image_url
-        )
-      `)
+  id,
+  from_user_id,
+  to_user_id,
+  my_dog_id,
+  target_dog_id,
+  status,
+  created_at,
+  requester_profile:from_user_id (
+    username,
+    name,
+    age,
+    gender
+  ),
+  requester_dog:my_dog_id (
+    name,
+    breed,
+    age,
+    image_url
+  )
+`)
+
       .eq('to_user_id', user.id)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
@@ -84,7 +88,7 @@ export default function WalkRequestsScreen() {
       return;
     }
 
-    setRequests(data as WalkRequest[]);
+    setRequests(data as unknown as WalkRequest[]);
     setLoading(false);
   };
 
@@ -95,7 +99,7 @@ export default function WalkRequestsScreen() {
   );
 
   const renderItem = ({ item }: { item: WalkRequest }) => {
-    const dog = item.dog;
+    const dog = item.requester_dog;
     if (!dog) return null;
 
     return (
@@ -106,7 +110,7 @@ export default function WalkRequestsScreen() {
             pathname: '/request-detail-profile',
             params: {
               requestId: item.id,
-              dogId: item.dog_id,
+              dogId: item.my_dog_id,   // ✅ 내가 보낸 강아지
               userId: item.from_user_id,
             },
           })
