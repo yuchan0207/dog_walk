@@ -65,7 +65,7 @@ export default function ViewScreen() {
   const fetchDogInfo = async () => {
     const { data, error } = await supabase
       .from('dog_profiles')
-      .select('id, name, breed, age, gender, created_at, owner_id') // 🔥 꼭 owner_id 포함
+      .select('id, name, breed, age, gender, created_at, owner_id')
       .eq('id', dogId)
       .single();
 
@@ -75,33 +75,25 @@ export default function ViewScreen() {
       return;
     }
 
-    console.log('✅ 불러온 dog 정보:', data); // ⬅ 로그로 확인
     setDog(data);
     setLoading(false);
   };
 
-
   const fetchDogImages = async (dogIdParam: string | string[]) => {
     const id = Array.isArray(dogIdParam) ? dogIdParam[0] : dogIdParam;
 
-    // 1. locations의 대표 이미지 먼저 확인
-    const { data: locationData, error: locationError } = await supabase
+    const { data: locationData } = await supabase
       .from('locations')
       .select('image_url')
       .eq('dog_id', id)
       .single();
 
     if (locationData?.image_url) {
-      setImages([{
-        id: 'fallback',
-        dog_id: id,
-        image_url: locationData.image_url,
-      }]);
+      setImages([{ id: 'fallback', dog_id: id, image_url: locationData.image_url }]);
       return;
     }
 
-    // 2. 없으면 dog_images에서 가져오기
-    const { data: imageData, error: imageError } = await supabase
+    const { data: imageData } = await supabase
       .from('dog_images')
       .select('id, dog_id, image_url')
       .eq('dog_id', id)
@@ -113,8 +105,6 @@ export default function ViewScreen() {
       setImages(cleaned);
       return;
     }
-
-    console.error('대표 이미지 불러오기 실패:', imageError?.message || locationError?.message);
   };
 
   const requestWalk = async () => {
@@ -138,7 +128,6 @@ export default function ViewScreen() {
       return;
     }
 
-    // ✅ 1) 이미 보낸 '대기중' 요청이 있는지 먼저 확인
     const { data: existing, error: existErr } = await supabase
       .from('walk_requests')
       .select('id, status, created_at')
@@ -160,13 +149,6 @@ export default function ViewScreen() {
       return;
     }
 
-    // (선택) 이미 수락된 적이 있다면 안내만 하고 끝낼 수도 있음
-    // if (existing && existing.status === 'accepted') {
-    //   Alert.alert('이미 수락됨', '이미 수락된 요청이 있어요. 채팅에서 이어가세요!');
-    //   return;
-    // }
-
-    // ✅ 2) 새 요청 삽입
     const { error } = await supabase.from('walk_requests').insert({
       from_user_id: user.id,
       to_user_id: dog.owner_id,
@@ -182,7 +164,6 @@ export default function ViewScreen() {
       router.push('/home');
     }
   };
-
 
   const InfoItem = ({ label, value }: { label: string; value: string }) => (
     <View style={styles.infoItem}>
@@ -212,13 +193,15 @@ export default function ViewScreen() {
       <View style={styles.singleImageWrapper}>
         <TouchableOpacity
           onPress={() => {
-            setSelectedImage(images[0]?.image_url.trim());
+            const uri = images[0]?.image_url?.trim() ?? '';
+            if (!uri) return;
+            setSelectedImage(uri);
             setModalVisible(true);
           }}
           style={styles.imageBox}
         >
           <Image
-            source={{ uri: images[0]?.image_url.trim() }}
+            source={{ uri: images[0]?.image_url?.trim() ?? '' }}
             style={styles.image}
             resizeMode="cover"
           />
@@ -231,12 +214,14 @@ export default function ViewScreen() {
         <InfoItem label="🚻 성별" value={dog.gender} />
       </View>
 
+      {/* ✅ 버튼 영역 */}
       <View style={styles.buttonGroup}>
+        {/* 1) 일지 보기: 항상 뷰 전용 화면으로 */}
         <TouchableOpacity
           style={[styles.button, { backgroundColor: '#4DB6AC' }]}
           onPress={() =>
             router.push({
-              pathname: isMine ? '/history' : '/history-view',
+              pathname: '/history-view',
               params: { dogId: dog.id },
             })
           }
@@ -244,6 +229,22 @@ export default function ViewScreen() {
           <Text style={styles.buttonText}>📜 일지 보기</Text>
         </TouchableOpacity>
 
+        {/* 2) 내 강아지일 때만 '일지 작성' 노출 (작성 화면으로) */}
+        {isMine && (
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#6C9BF8' }]}
+            onPress={() =>
+              router.push({
+                pathname: '/history',
+                params: { dogId: dog.id },
+              })
+            }
+          >
+            <Text style={styles.buttonText}>✍️ 일지 작성</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* 3) 내 강아지일 때만 수정/삭제 */}
         {isMine ? (
           <>
             <TouchableOpacity
@@ -258,7 +259,7 @@ export default function ViewScreen() {
                     breed: dog.breed,
                     gender: dog.gender,
                     age: String(dog.age),
-                    imageUrl: images[0]?.image_url || '',
+                    imageUrl: images[0]?.image_url ?? '',
                   },
                 })
               }
@@ -291,15 +292,17 @@ export default function ViewScreen() {
               <Text style={styles.buttonText}>🗑️ 삭제하기</Text>
             </TouchableOpacity>
           </>
-        ) : !requestId ? ( // ✅ requestId가 없을 때만 '산책 신청하기' 노출
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: '#FF7043' }]}
-            onPress={requestWalk}
-          >
-            <Text style={styles.buttonText}>산책 신청하기</Text>
-          </TouchableOpacity>
-        ) : null}
-
+        ) : (
+          // 4) 남의 강아지일 때, requestId 없으면 '산책 신청하기'
+          !requestId && (
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#FF7043' }]}
+              onPress={requestWalk}
+            >
+              <Text style={styles.buttonText}>산책 신청하기</Text>
+            </TouchableOpacity>
+          )
+        )}
       </View>
 
       <Modal visible={modalVisible} transparent onRequestClose={() => setModalVisible(false)}>
@@ -322,85 +325,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF8F2',
     flexGrow: 1,
   },
-  backButton: {
-    marginBottom: 12,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    fontSize: 16,
-    color: '#FF7043',
-    fontWeight: '600',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    textAlign: 'center',
-    color: '#FF7043',
-    marginBottom: 20,
-  },
-  singleImageWrapper: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  imageBox: {
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  image: {
-    width: 260,
-    height: 200,
-    borderRadius: 20,
-    backgroundColor: '#ddd',
-  },
-  section: {
-    marginBottom: 30,
-    paddingHorizontal: 8,
-  },
-  infoItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-    borderBottomWidth: 0.5,
-    borderColor: '#ddd',
-    paddingBottom: 8,
-  },
-  infoLabel: {
-    fontWeight: '600',
-    fontSize: 16,
-    color: '#555',
-    width: '40%',
-  },
-  infoValue: {
-    fontSize: 16,
-    color: '#333',
-    width: '55%',
-    textAlign: 'right',
-  },
-  buttonGroup: {
-    marginTop: 16,
-    gap: 12,
-  },
-  button: {
-    paddingVertical: 16,
-    borderRadius: 30,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 18,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.8)',
-  },
+  backButton: { marginBottom: 12, alignSelf: 'flex-start' },
+  backText: { fontSize: 16, color: '#FF7043', fontWeight: '600' },
+  title: { fontSize: 28, fontWeight: '700', textAlign: 'center', color: '#FF7043', marginBottom: 20 },
+  singleImageWrapper: { alignItems: 'center', marginBottom: 30 },
+  imageBox: { alignItems: 'center', backgroundColor: '#fff', borderRadius: 20, overflow: 'hidden' },
+  image: { width: 260, height: 200, borderRadius: 20, backgroundColor: '#ddd' },
+  section: { marginBottom: 30, paddingHorizontal: 8 },
+  infoItem: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14, borderBottomWidth: 0.5, borderColor: '#ddd', paddingBottom: 8 },
+  infoLabel: { fontWeight: '600', fontSize: 16, color: '#555', width: '40%' },
+  infoValue: { fontSize: 16, color: '#333', width: '55%', textAlign: 'right' },
+  buttonGroup: { marginTop: 16, gap: 12 },
+  button: { paddingVertical: 16, borderRadius: 30, alignItems: 'center' },
+  buttonText: { color: '#fff', fontWeight: '600', fontSize: 18 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.8)' },
 });

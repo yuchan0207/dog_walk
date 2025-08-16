@@ -308,12 +308,6 @@ export default function HistoryScreen() {
 
           <Text style={[styles.title, { marginTop: 30 }]}>📖 기록들</Text>
 
-          <TouchableOpacity
-            onPress={() => router.push({ pathname: '/history-view', params: { dogId } })}
-            style={styles.viewOnlyButton}
-          >
-            <Text style={styles.viewOnlyText}>👀 내 일지 모아보기</Text>
-          </TouchableOpacity>
         </ScrollView>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>

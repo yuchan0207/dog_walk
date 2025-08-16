@@ -20,6 +20,7 @@ const styles = StyleSheet.create({
     paddingTop: 80,
     padding: 24,
     backgroundColor: '#fff',
+    paddingBottom: 0
   },
   title: {
     fontSize: 24,

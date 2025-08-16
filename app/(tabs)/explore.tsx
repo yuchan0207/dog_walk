@@ -53,53 +53,124 @@ export default function ExploreScreen() {
     return R * c;
   };
 
-  // ✅ (1) 가장 최근 등록한 "내 강아지" 1마리 id → 그 강아지 위치를 anchor로
-  const fetchMyDogAnchor = async () => {
-    if (!user?.id) return null;
+  // 🔐 안전한 유저 ID 얻기 (useUser가 null일 때 대비)
+  const getUid = async () => {
+    const { data } = await supabase.auth.getUser();
+    return user?.id ?? data.user?.id ?? null;
+  };
 
-    // 1) 내 강아지 중 최신 등록 1마리
+  // ✅ (1) 가장 최근 등록한 "내 강아지" 위치 anchor
+  const fetchMyDogAnchor = async () => {
+    const uid = await getUid();
+    if (!uid) return null;
+
+    const tryOwnerQuery = async (orderBy?: 'updated_at' | 'created_at') => {
+      let q = supabase
+        .from('locations_public')
+        .select('latitude, longitude')
+        .eq('owner_id', uid);
+
+      if (orderBy) q = q.order(orderBy, { ascending: false });
+
+      const { data, error } = await q.limit(1).maybeSingle();
+      if (!error && data?.latitude != null && data?.longitude != null) {
+        return { latitude: data.latitude, longitude: data.longitude };
+      }
+      return null;
+    };
+
+    const ownerByUpdated = await tryOwnerQuery('updated_at');
+    if (ownerByUpdated) return ownerByUpdated;
+
+    const ownerByCreated = await tryOwnerQuery('created_at');
+    if (ownerByCreated) return ownerByCreated;
+
+    const ownerAny = await (async () => {
+      const { data } = await supabase
+        .from('locations_public')
+        .select('latitude, longitude')
+        .eq('owner_id', uid)
+        .limit(1)
+        .maybeSingle();
+      if (data?.latitude != null && data?.longitude != null) {
+        return { latitude: data.latitude, longitude: data.longitude };
+      }
+      return null;
+    })();
+    if (ownerAny) return ownerAny;
+
     const { data: recentDog, error: dogErr } = await supabase
       .from('dog_profiles')
       .select('id')
-      .eq('owner_id', user.id)
+      .eq('owner_id', uid)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (dogErr) {
-      console.log('🐶 최근 강아지 조회 에러:', dogErr.message, dogErr);
+    if (dogErr || !recentDog?.id) {
+      if (dogErr) console.log('🐶 최근 강아지 조회 에러:', dogErr.message, dogErr);
       return null;
     }
-    if (!recentDog?.id) return null;
 
-    // 2) 그 강아지의 위치(뷰에서 1건)
-    const { data: loc, error: locErr } = await supabase
-      .from('locations_public')
+    const tryDogQuery = async (orderBy?: 'updated_at' | 'created_at') => {
+      let q = supabase
+        .from('locations_public')
+        .select('latitude, longitude')
+        .eq('dog_id', recentDog.id);
+
+      if (orderBy) q = q.order(orderBy, { ascending: false });
+
+      const { data, error } = await q.limit(1).maybeSingle();
+      if (!error && data?.latitude != null && data?.longitude != null) {
+        return { latitude: data.latitude, longitude: data.longitude };
+      }
+      return null;
+    };
+
+    const dogByUpdated = await tryDogQuery('updated_at');
+    if (dogByUpdated) return dogByUpdated;
+
+    const dogByCreated = await tryDogQuery('created_at');
+    if (dogByCreated) return dogByCreated;
+
+    const dogAny = await (async () => {
+      const { data } = await supabase
+        .from('locations_public')
+        .select('latitude, longitude')
+        .eq('dog_id', recentDog.id)
+        .limit(1)
+        .maybeSingle();
+      if (data?.latitude != null && data?.longitude != null) {
+        return { latitude: data.latitude, longitude: data.longitude };
+      }
+      return null;
+    })();
+    if (dogAny) return dogAny;
+
+    const { data: rawLoc } = await supabase
+      .from('locations')
       .select('latitude, longitude')
       .eq('dog_id', recentDog.id)
       .limit(1)
       .maybeSingle();
 
-    if (locErr) {
-      console.log('📍 최근 강아지 위치 조회 에러:', locErr.message, locErr);
-      return null;
+    if (rawLoc?.latitude != null && rawLoc?.longitude != null) {
+      return { latitude: rawLoc.latitude, longitude: rawLoc.longitude };
     }
-    if (!loc || loc.latitude == null || loc.longitude == null) return null;
 
-    return { latitude: loc.latitude, longitude: loc.longitude };
+    return null;
   };
 
-  // ✅ (2) 집 위치 anchor (폴백)
+  // ✅ (2) 집 위치 anchor
   const fetchHomeAnchor = async () => {
-    if (!user?.id) return null;
+    const uid = await getUid();
+    if (!uid) return null;
 
     const { data, error } = await supabase
       .from('user_home_locations')
       .select('latitude, longitude')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false }) // updated_at 없을 수 있어 created_at 사용
-      .limit(1)
-      .maybeSingle();
+      .eq('user_id', uid)
+      .single();
 
     if (error) {
       console.log('🏠 집 위치 조회 에러:', error.message, error);
@@ -110,11 +181,19 @@ export default function ExploreScreen() {
     return { latitude: data.latitude, longitude: data.longitude };
   };
 
-  // ✅ 전체 강아지 위치(목록)
+  // ✅ 전체 강아지 위치(목록) — 내 강아지는 제외
   const fetchDogLocations = async () => {
-    const { data, error } = await supabase
+    const uid = await getUid(); // 내 id
+    let q = supabase
       .from('locations_public')
       .select('id, latitude, longitude, image_url, dog_name, breed, age, owner_id, dog_id');
+
+    // 서버 쿼리에서 바로 제외
+    if (uid) {
+      q = q.neq('owner_id', uid);
+    }
+
+    const { data, error } = await q;
 
     if (error) {
       console.error(error);
@@ -130,13 +209,11 @@ export default function ExploreScreen() {
     (async () => {
       setLoading(true);
 
-      // 1) 가장 최근 등록한 내 강아지 기준 anchor
       const myDogAnchor = await fetchMyDogAnchor();
       if (myDogAnchor) {
         setAnchorLocation(myDogAnchor);
         setAnchorSource('mydog');
       } else {
-        // 2) 없으면 집 위치로 폴백
         const homeAnchor = await fetchHomeAnchor();
         if (homeAnchor) {
           setAnchorLocation(homeAnchor);
@@ -171,7 +248,6 @@ export default function ExploreScreen() {
       ? withDistance.filter((d) => (d.breed ?? '').toLowerCase().includes(q))
       : withDistance;
 
-    // 반경 5km 필터(기준점 있을 때만)
     const radiusFiltered = anchorLocation
       ? searched.filter((d) => d.distance < 5000)
       : searched;
@@ -180,7 +256,7 @@ export default function ExploreScreen() {
     setDogsWithDistance(sorted);
 
     // 디버깅 로그
-    console.log('🐶 전체 강아지:', dogLocations.length);
+    console.log('🐶 전체 강아지(내 강아지 제외):', dogLocations.length);
     console.log('🎯 기준점(source):', anchorSource, anchorLocation);
     console.log('🔍 검색어:', q);
     console.log(
@@ -209,7 +285,6 @@ export default function ExploreScreen() {
       {/* 기준점 안내 배너 */}
       {anchorSource === 'mydog' && (
         <View style={styles.banner}>
-          <Text style={styles.bannerTitle}>🎯 기준: 내 최근 등록 강아지</Text>
           <Text style={styles.bannerText}>반경 5km 안의 강아지만 보여줘요.</Text>
         </View>
       )}
@@ -238,7 +313,6 @@ export default function ExploreScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.itemRow}>
-            {/* 이미지 크래시 가드 */}
             {item.image_url ? (
               <Image source={{ uri: item.image_url }} style={styles.thumb} />
             ) : (
@@ -322,8 +396,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     inset: 0,
   },
-
-  // 배너 스타일
   banner: {
     padding: 12,
     borderRadius: 10,

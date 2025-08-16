@@ -88,6 +88,15 @@ export default function AddScheduleScreen() {
 
   return (
     <View style={styles.container}>
+      {/* ✅ 돌아가기 버튼 추가 */}
+      <TouchableOpacity
+        onPress={() => router.back()}
+        style={{ position: 'absolute', top: 12, left: 12, padding: 6 }}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Text style={{ color: '#81C784', fontWeight: '600' }}>← 돌아가기</Text>
+      </TouchableOpacity>
+
       <Text style={styles.label}>메모</Text>
       <TextInput
         style={styles.input}
@@ -130,8 +139,20 @@ export default function AddScheduleScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#FFF7F1', paddingTop: 50 },
   label: { fontSize: 16, marginBottom: 8, color: '#333' },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, marginBottom: 16, backgroundColor: '#fff' },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 16,
+    backgroundColor: '#fff',
+  },
   pickerButton: { padding: 12, backgroundColor: '#eee', borderRadius: 8, marginBottom: 16 },
-  button: { backgroundColor: '#81C784', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  button: {
+    backgroundColor: '#81C784',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });
