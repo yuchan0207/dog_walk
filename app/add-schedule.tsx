@@ -17,7 +17,15 @@ export default function AddScheduleScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const router = useRouter();
 
+  const isPast = date.getTime() < Date.now();
+
   const handleAdd = async () => {
+    // ✅ 과거 날짜 방지
+    if (date.getTime() <= Date.now()) {
+      Alert.alert('과거 날짜는 등록할 수 없습니다', '현재 이후의 날짜/시간을 선택해주세요.');
+      return;
+    }
+
     const {
       data: { user },
       error: userError,
@@ -57,10 +65,14 @@ export default function AddScheduleScreen() {
           body: `${title || '산책'} 시간이 20분 뒤에 시작돼요!`,
           sound: 'default',
         },
+        // 그대로 유지
         trigger: notifyTime.getTime() as unknown as Notifications.NotificationTriggerInput,
       });
 
-      await supabase.from('walk_schedules').update({ notification_id: notificationId }).eq('id', insertData.id);
+      await supabase
+        .from('walk_schedules')
+        .update({ notification_id: notificationId })
+        .eq('id', insertData.id);
     } catch (err) {
       console.warn('알림 등록 실패:', err);
     }
@@ -114,6 +126,8 @@ export default function AddScheduleScreen() {
           value={date}
           mode="datetime"
           display="default"
+          // ✅ 과거 선택 제한
+          minimumDate={new Date()}
           onChange={(event, selectedDate) => {
             setShowPicker(false);
             if (selectedDate) setDate(selectedDate);
@@ -129,7 +143,12 @@ export default function AddScheduleScreen() {
         placeholder="예정 / 완료"
       />
 
-      <TouchableOpacity onPress={handleAdd} style={styles.button}>
+      <TouchableOpacity
+        onPress={handleAdd}
+        style={[styles.button, isPast && { opacity: 0.6 }]}
+        // 시각적 비활성화 (옵션) — 실제 방지는 handleAdd에서 수행
+        disabled={false}
+      >
         <Text style={styles.buttonText}>일정 추가하기</Text>
       </TouchableOpacity>
     </View>
@@ -137,7 +156,7 @@ export default function AddScheduleScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#FFF7F1', paddingTop: 50 },
+  container: { flex: 1, padding: 20, backgroundColor: '#FFF7F1', paddingTop: 90 },
   label: { fontSize: 16, marginBottom: 8, color: '#333' },
   input: {
     borderWidth: 1,
