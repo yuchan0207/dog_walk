@@ -1,8 +1,8 @@
 'use client';
 
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router'; // ✅ 추가
-import { useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { supabase } from '../lib/supabase';
@@ -19,10 +19,13 @@ type HomeLocation = {
 };
 
 export default function SetHomeScreen() {
-  const router = useRouter(); // ✅ 추가
+  const router = useRouter(); 
   const [region, setRegion] = useState<Region | null>(null);
   const [marker, setMarker] = useState<MarkerPosition | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+
+  // ✅ 추가: 지도 참조
+  const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
     (async () => {
@@ -103,6 +106,34 @@ export default function SetHomeScreen() {
     }
   };
 
+  // ✅ 추가: 내 위치로 이동
+  const goToMyLocation = async () => {
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        const req = await Location.requestForegroundPermissionsAsync();
+        if (req.status !== 'granted') {
+          Alert.alert('위치 권한이 필요합니다.');
+          return;
+        }
+      }
+
+      const { coords } = await Location.getCurrentPositionAsync({});
+      const nextRegion: Region = {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+
+      setRegion(nextRegion);
+      setMarker({ latitude: coords.latitude, longitude: coords.longitude });
+      mapRef.current?.animateToRegion(nextRegion, 600);
+    } catch (e) {
+      Alert.alert('현재 위치를 가져올 수 없습니다.');
+    }
+  };
+
   if (!region) {
     return (
       <View style={styles.center}>
@@ -119,6 +150,7 @@ export default function SetHomeScreen() {
       </TouchableOpacity>
 
       <MapView
+        ref={mapRef}
         style={styles.map}
         initialRegion={region}
         onPress={(e) => {
@@ -128,6 +160,11 @@ export default function SetHomeScreen() {
       >
         {marker && <Marker coordinate={marker} />}
       </MapView>
+
+      {/* ✅ 내 위치 버튼 (기존 UI를 해치지 않도록 플로팅) */}
+      <TouchableOpacity style={styles.myLocationButton} onPress={goToMyLocation}>
+        <Text style={styles.myLocationText}>📍 내 위치</Text>
+      </TouchableOpacity>
 
       <View style={styles.buttonContainer}>
         <Button title="이 위치로 저장" onPress={saveHomeLocation} />
@@ -163,5 +200,25 @@ const styles = StyleSheet.create({
     color: '#FF7043',
     fontWeight: '600',
     fontSize: 16,
+  },
+  // ✅ 추가: 내 위치 버튼 스타일
+  myLocationButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 110, // 저장 버튼 위에 겹치지 않게
+    zIndex: 1,
+    backgroundColor: '#fff',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  myLocationText: {
+    color: '#333',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

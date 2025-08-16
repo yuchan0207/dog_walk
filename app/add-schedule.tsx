@@ -2,19 +2,15 @@
 
 import DateTimePicker from '@react-native-community/datetimepicker';
 import dayjs from 'dayjs';
-import { useRouter } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import {
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 
 export default function AddScheduleScreen() {
+  // ✅ 채팅방에서 넘어온 roomId 받기 (없으면 메시지 전송은 생략)
+  const { roomId } = useLocalSearchParams<{ roomId?: string }>();
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(new Date());
   const [status, setStatus] = useState('예정');
@@ -32,21 +28,62 @@ export default function AddScheduleScreen() {
       return;
     }
 
-    const { error } = await supabase.from('walk_schedules').insert({
-      user_id: user.id,
-      dog_id: null, // 오류 방지
-      target_dog_id: null, // 오류 방지
-      memo: title,
-      scheduled_at: date.toISOString(), // ISO 문자열로 저장
-      status: status,
-    });
+    // 1) Supabase에 일정 추가
+    const { data: insertData, error: insertError } = await supabase
+      .from('walk_schedules')
+      .insert({
+        user_id: user.id,
+        dog_id: null,
+        target_dog_id: null,
+        memo: title,
+        scheduled_at: date.toISOString(),
+        status: status,
+      })
+      .select()
+      .single();
 
-    if (error) {
-      Alert.alert('일정 추가 실패', error.message);
-    } else {
-      Alert.alert('일정이 성공적으로 추가되었습니다');
-      router.back();
+    if (insertError || !insertData) {
+      Alert.alert('일정 추가 실패', insertError?.message ?? '알 수 없는 오류');
+      return;
     }
+
+    // 2) 로컬 알림 예약 (20분 전) — 기존 동작 유지
+    try {
+      const walkDate = new Date(date);
+      const notifyTime = new Date(walkDate.getTime() - 20 * 60 * 1000);
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🐾 산책 알림',
+          body: `${title || '산책'} 시간이 20분 뒤에 시작돼요!`,
+          sound: 'default',
+        },
+        trigger: notifyTime.getTime() as unknown as Notifications.NotificationTriggerInput,
+      });
+
+      await supabase.from('walk_schedules').update({ notification_id: notificationId }).eq('id', insertData.id);
+    } catch (err) {
+      console.warn('알림 등록 실패:', err);
+    }
+
+    // 3) (카톡처럼) 채팅방으로 안내 메시지 전송 — roomId가 있을 때만
+    try {
+      if (roomId) {
+        const pretty = dayjs(date).format('YYYY-MM-DD HH:mm');
+        const content = `📅 일정 등록: ${pretty} — ${title || '산책'} (${status})`;
+        await supabase.from('messages').insert({
+          room_id: roomId,
+          sender_id: user.id,
+          content,
+          is_read: false,
+        });
+      }
+    } catch (err) {
+      console.warn('채팅 안내 메시지 전송 실패:', err);
+      // 실패해도 일정 등록 자체는 유지
+    }
+
+    Alert.alert('일정이 성공적으로 추가되었습니다');
+    router.back();
   };
 
   return (
@@ -60,10 +97,7 @@ export default function AddScheduleScreen() {
       />
 
       <Text style={styles.label}>날짜 및 시간</Text>
-      <TouchableOpacity
-        onPress={() => setShowPicker(true)}
-        style={styles.pickerButton}
-      >
+      <TouchableOpacity onPress={() => setShowPicker(true)} style={styles.pickerButton}>
         <Text>{dayjs(date).format('YYYY-MM-DD HH:mm')}</Text>
       </TouchableOpacity>
       {showPicker && (
@@ -94,40 +128,10 @@ export default function AddScheduleScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: '#FFF7F1',
-    paddingTop: 50,
-  },
-  label: {
-    fontSize: 16,
-    marginBottom: 8,
-    color: '#333',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 16,
-    backgroundColor: '#fff',
-  },
-  pickerButton: {
-    padding: 12,
-    backgroundColor: '#eee',
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  button: {
-    backgroundColor: '#81C784',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  container: { flex: 1, padding: 20, backgroundColor: '#FFF7F1', paddingTop: 50 },
+  label: { fontSize: 16, marginBottom: 8, color: '#333' },
+  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, marginBottom: 16, backgroundColor: '#fff' },
+  pickerButton: { padding: 12, backgroundColor: '#eee', borderRadius: 8, marginBottom: 16 },
+  button: { backgroundColor: '#81C784', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });

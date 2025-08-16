@@ -10,17 +10,30 @@ export default function IndexScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    // 앱 시작 시 로그인 여부 확인
-    const checkLogin = async () => {
-      const { data, error } = await supabase.auth.getUser();
+    const checkLoginAndHomeLocation = async () => {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-      if (data?.user) {
-        // 로그인된 경우 -> 바로 홈으로 이동
-        router.replace('/home');
+      if (user) {
+        const { data: homeLocation, error: locationError } = await supabase
+          .from('user_home_locations')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        if (homeLocation) {
+          // 집 위치가 등록되어 있으면 홈으로
+          router.replace('/home');
+        } else {
+          // 등록 안 되어 있으면 집 위치 설정 페이지로
+          router.replace('/set_home');
+        }
       }
     };
 
-    checkLogin();
+    checkLoginAndHomeLocation();
   }, []);
 
   const goToLogin = () => {

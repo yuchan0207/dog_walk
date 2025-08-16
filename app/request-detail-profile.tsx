@@ -75,6 +75,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 10,
+    backgroundColor: '#eee',
   },
   dogName: {
     fontSize: 18,
@@ -91,52 +92,96 @@ type Profile = Database['public']['Tables']['profiles']['Row'];
 type DogProfile = Database['public']['Tables']['dog_profiles']['Row'];
 
 export default function RequestDetailProfile() {
-  const { userId, requestId } = useLocalSearchParams();
+  // ✅ explore에서 오면 dogId만 들어오고, 요청 플로우에선 requestId가 들어옴
+  const { userId, requestId, dogId } = useLocalSearchParams<{
+    userId?: string;
+    requestId?: string;
+    dogId?: string;
+  }>();
   const router = useRouter();
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [dog, setDog] = useState<DogProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const isRequestFlow = !!requestId; // 요청 수락/거절 플로우 여부
+
   useEffect(() => {
     (async () => {
-      if (!userId || typeof userId !== 'string' || !requestId || typeof requestId !== 'string') return;
+      if (!userId || typeof userId !== 'string') {
+        Alert.alert('잘못된 접근입니다.');
+        setLoading(false);
+        return;
+      }
 
-      // 1. 프로필 불러오기
-      const { data: profileData } = await supabase
+      // 1) 상대 프로필
+      const { data: profileData, error: pErr } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
-      // 2. walk_requests에서 my_dog_id를 가져옴
-      const { data: requestData } = await supabase
-        .from('walk_requests')
-        .select('*')
-        .eq('id', requestId)
-        .single();
-
-      if (!requestData) {
-        Alert.alert('신청 정보를 불러올 수 없습니다.');
+      if (pErr) {
+        Alert.alert('유저 정보를 불러올 수 없습니다.');
+        setLoading(false);
         return;
       }
-      if (!requestData.my_dog_id) {
-        Alert.alert('강아지 정보가 올바르지 않습니다.');
-        return;
-      }
-
-      // 3. 신청자가 보낸 강아지(my_dog_id)로 강아지 정보 불러오기
-      const { data: dogData } = await supabase
-        .from('dog_profiles')
-        .select('*')
-        .eq('id', requestData.my_dog_id)
-        .single();
-
       setProfile(profileData);
-      setDog(dogData);
-      setLoading(false);
+
+      // 2) 강아지 정보 로딩 경로 분기
+      if (isRequestFlow && typeof requestId === 'string') {
+        // 기존: walk_requests에서 my_dog_id를 얻어 신청자가 보낸 강아지 로드
+        const { data: req, error: rErr } = await supabase
+          .from('walk_requests')
+          .select('*')
+          .eq('id', requestId)
+          .single();
+
+        if (rErr || !req) {
+          Alert.alert('신청 정보를 불러올 수 없습니다.');
+          setLoading(false);
+          return;
+        }
+        if (!req.my_dog_id) {
+          Alert.alert('강아지 정보가 올바르지 않습니다.');
+          setLoading(false);
+          return;
+        }
+
+        const { data: dogData, error: dErr } = await supabase
+          .from('dog_profiles')
+          .select('*')
+          .eq('id', req.my_dog_id)
+          .single();
+
+        if (dErr) {
+          Alert.alert('강아지 정보를 불러올 수 없습니다.');
+          setLoading(false);
+          return;
+        }
+        setDog(dogData);
+        setLoading(false);
+      } else if (dogId && typeof dogId === 'string') {
+        // ✅ explore → 프로필 보기: 넘겨받은 dogId로 바로 로드
+        const { data: dogData, error: dErr } = await supabase
+          .from('dog_profiles')
+          .select('*')
+          .eq('id', dogId)
+          .single();
+
+        if (dErr) {
+          Alert.alert('강아지 정보를 불러올 수 없습니다.');
+          setLoading(false);
+          return;
+        }
+        setDog(dogData);
+        setLoading(false);
+      } else {
+        // dogId도 requestId도 없음
+        setLoading(false);
+      }
     })();
-  }, [userId, requestId]);
+  }, [userId, requestId, dogId, isRequestFlow]);
 
   const handleAccept = async () => {
     if (!requestId || typeof requestId !== 'string') return;
@@ -146,31 +191,34 @@ export default function RequestDetailProfile() {
       .update({ status: 'accepted' })
       .eq('id', requestId);
 
-    if (!error) {
-      const { data: request } = await supabase
-        .from('walk_requests')
-        .select('*')
-        .eq('id', requestId)
+    if (error) {
+      Alert.alert('수락 처리 실패', error.message);
+      return;
+    }
+
+    const { data: request } = await supabase
+      .from('walk_requests')
+      .select('*')
+      .eq('id', requestId)
+      .single();
+
+    if (request) {
+      const { data: roomData, error: insertError } = await supabase
+        .from('chat_rooms')
+        .insert({
+          user1_id: request.from_user_id,
+          user2_id: request.to_user_id,
+        })
+        .select()
         .single();
 
-      if (request) {
-        const { data: roomData, error: insertError } = await supabase
-          .from('chat_rooms')
-          .insert({
-            user1_id: request.from_user_id,
-            user2_id: request.to_user_id,
-          })
-          .select()
-          .single();
-
-        if (insertError) {
-          Alert.alert('채팅방 생성에 실패했습니다.');
-          return;
-        }
-
-        Alert.alert('산책 신청이 수락되었고, 채팅방이 생성되었습니다!');
-        router.replace(`/chat-room/${roomData.id}`);
+      if (insertError) {
+        Alert.alert('채팅방 생성에 실패했습니다.');
+        return;
       }
+
+      Alert.alert('산책 신청이 수락되었고, 채팅방이 생성되었습니다!');
+      router.replace(`/chat-room/${roomData.id}`);
     }
   };
 
@@ -193,6 +241,11 @@ export default function RequestDetailProfile() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      {/* 돌아가기 */}
+      <TouchableOpacity onPress={() => router.back()} style={{ marginBottom: 8 }}>
+        <Text style={{ color: '#FF7043', fontWeight: '600' }}>← 돌아가기</Text>
+      </TouchableOpacity>
+
       <Text style={styles.title}>👤 상대방 정보</Text>
       <View style={styles.section}>
         <Text style={styles.label}>이름</Text>
@@ -205,17 +258,27 @@ export default function RequestDetailProfile() {
         <Text style={styles.valueBox}>{profile.gender}</Text>
       </View>
 
-      <Text style={styles.title}>🐶 신청자가 보낸 강아지</Text>
+      <Text style={styles.title}>
+        {isRequestFlow ? '🐶 신청자가 보낸 강아지' : '🐶 상대방의 강아지'}
+      </Text>
+
       {dog && (
         <View style={styles.dogItem}>
           <Image source={{ uri: dog.image_url ?? undefined }} style={styles.dogImage} />
 
           <View style={{ flex: 1 }}>
             <Text style={styles.dogName}>{dog.name}</Text>
-            <Text>{dog.breed} / {dog.age}살</Text>
+            <Text>
+              {dog.breed} / {dog.age}살
+            </Text>
+
             <TouchableOpacity
               onPress={() =>
-                router.push({ pathname: '/view', params: { dogId: dog.id, requestId } })
+                router.push({
+                  pathname: '/view',
+                  // ✅ requestId는 있을 때만 전달 → Explore에서 온 경우에는 전달되지 않음
+                  params: { dogId: dog.id, ...(isRequestFlow ? { requestId } : {}) },
+                })
               }
             >
               <Text style={styles.link}>강아지 보기 →</Text>
@@ -224,14 +287,20 @@ export default function RequestDetailProfile() {
         </View>
       )}
 
-      <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.button} onPress={handleAccept}>
-          <Text style={styles.buttonText}>수락하기</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.button, { backgroundColor: '#ccc' }]} onPress={handleReject}>
-          <Text style={[styles.buttonText, { color: '#333' }]}>거절하기</Text>
-        </TouchableOpacity>
-      </View>
+      {/* ✅ 요청 플로우에서만 수락/거절 노출 */}
+      {isRequestFlow ? (
+        <View style={styles.buttonRow}>
+          <TouchableOpacity style={styles.button} onPress={handleAccept}>
+            <Text style={styles.buttonText}>수락하기</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#ccc' }]}
+            onPress={handleReject}
+          >
+            <Text style={[styles.buttonText, { color: '#333' }]}>거절하기</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </ScrollView>
   );
 }

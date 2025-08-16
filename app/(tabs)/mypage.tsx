@@ -120,16 +120,16 @@ export default function MyPage() {
       <TouchableOpacity
         style={{
           position: 'absolute',
-          top: 120,
-          left: 250,
-          backgroundColor: '#FF7043',
+          top: 460,
+          left: 270,
+          backgroundColor: 'lightgreen',
           paddingVertical: 8,
           paddingHorizontal: 16,
           borderRadius: 20,
         }}
         onPress={() => router.push('/set_home')}
       >
-        <Text style={{ color: 'white', fontWeight: '600' }}>내 집 위치 정하기</Text>
+        <Text style={{ color: 'white', fontWeight: '600' }}>내 집 위치</Text>
       </TouchableOpacity>
 
 

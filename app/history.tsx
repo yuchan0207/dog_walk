@@ -8,18 +8,20 @@ import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  ActionSheetIOS,
   Alert,
   FlatList,
   Image,
   Keyboard,
   KeyboardAvoidingView,
+  LayoutAnimation, // ✅ 추가: 접기/펼치기 애니메이션
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { supabase } from '../lib/supabase';
@@ -36,7 +38,20 @@ export default function HistoryScreen() {
   const [diaries, setDiaries] = useState<any[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const pickImage = async () => {
+  // ✅ 추가: 달력 접힘/펼침 상태
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const toggleCalendar = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsCalendarOpen((v) => !v);
+  };
+
+  // ✅ 앨범에서 선택 (여러 장)
+  const pickFromLibrary = async () => {
+    const mediaPerm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!mediaPerm.granted) {
+      return Alert.alert('권한 필요', '앨범 접근 권한을 허용해주세요.');
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       base64: true,
@@ -44,7 +59,53 @@ export default function HistoryScreen() {
       allowsMultipleSelection: true,
       selectionLimit: 5,
     });
-    if (!result.canceled) setImageAssets(result.assets);
+
+    if (!result.canceled) {
+      setImageAssets(result.assets);
+    }
+  };
+
+  // ✅ 카메라로 촬영 (단일 장, 기존 목록에 추가)
+  const pickFromCamera = async () => {
+    const camPerm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!camPerm.granted) {
+      return Alert.alert('권한 필요', '카메라 접근 권한을 허용해주세요.');
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: true,
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      setImageAssets((prev) => [...prev, result.assets[0]]);
+    }
+  };
+
+  // ✅ 선택창 띄우기 (iOS: ActionSheet, Android: Alert)
+  const pickImage = async () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['취소', '카메라로 촬영', '앨범에서 선택'],
+          cancelButtonIndex: 0,
+        },
+        async (buttonIndex) => {
+          if (buttonIndex === 1) {
+            await pickFromCamera();
+          } else if (buttonIndex === 2) {
+            await pickFromLibrary();
+          }
+        }
+      );
+    } else {
+      Alert.alert('사진 선택', '방식을 선택하세요', [
+        { text: '카메라로 촬영', onPress: pickFromCamera },
+        { text: '앨범에서 선택', onPress: pickFromLibrary },
+        { text: '취소', style: 'cancel' },
+      ]);
+    }
   };
 
   const uploadDiary = async () => {
@@ -146,40 +207,61 @@ export default function HistoryScreen() {
           style={{ flex: 1, backgroundColor: '#FFF8F0', padding: 20 }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ← 돌아가기 버튼 추가 */}
-          <TouchableOpacity onPress={() => router.back()} style={{paddingTop: 20 }}>
+          {/* ← 돌아가기 버튼 */}
+          <TouchableOpacity onPress={() => router.back()} style={{ paddingTop: 20 }}>
             <Text style={{ color: '#FF7043', fontWeight: '600', fontSize: 16 }}>← 돌아가기</Text>
           </TouchableOpacity>
 
           <Text style={styles.title}>🐶 강아지 일지</Text>
 
-          {/* 이하 기존 코드 그대로 유지 */}
-
-          <Calendar
-            markedDates={{ [selectedDate]: { selected: true, marked: true, selectedColor: '#FFA726' } }}
-            onDayPress={(day) => setSelectedDate(day.dateString)}
-            theme={{
-              backgroundColor: '#FFF8F0',
-              calendarBackground: '#FFF8F0',
-              todayTextColor: '#FF7043',
-              dayTextColor: '#333',
-              textDayFontWeight: '500',
-              textMonthFontWeight: 'bold',
-              textDayFontSize: 16,
-              textMonthFontSize: 18,
-              selectedDayBackgroundColor: '#FFA726',
-              selectedDayTextColor: '#fff',
-            }}
+          {/* ✅ 달력 헤더 (토글 버튼) */}
+          <TouchableOpacity
+            onPress={toggleCalendar}
             style={{
+              backgroundColor: '#FFE0B2',
               borderRadius: 12,
-              elevation: 3,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 4,
-              marginBottom: 20,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              marginBottom: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}
-          />
+          >
+            <Text style={{ fontWeight: '700', color: '#5D4037' }}>날짜 선택</Text>
+            <Text style={{ color: '#5D4037' }}>
+              {selectedDate} {isCalendarOpen ? '▲' : '▼'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* ✅ 달력: 접힘/펼침 */}
+          {isCalendarOpen && (
+            <Calendar
+              markedDates={{ [selectedDate]: { selected: true, marked: true, selectedColor: '#FFA726' } }}
+              onDayPress={(day) => setSelectedDate(day.dateString)}
+              theme={{
+                backgroundColor: '#FFF8F0',
+                calendarBackground: '#FFF8F0',
+                todayTextColor: '#FF7043',
+                dayTextColor: '#333',
+                textDayFontWeight: '500',
+                textMonthFontWeight: 'bold',
+                textDayFontSize: 16,
+                textMonthFontSize: 18,
+                selectedDayBackgroundColor: '#FFA726',
+                selectedDayTextColor: '#fff',
+              }}
+              style={{
+                borderRadius: 12,
+                elevation: 3,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                marginBottom: 20,
+              }}
+            />
+          )}
 
           <Text style={styles.label}>📸 사진</Text>
           <TouchableOpacity onPress={pickImage} style={styles.pickButton}>
@@ -204,11 +286,14 @@ export default function HistoryScreen() {
           />
 
           <Text style={styles.label}>📝 메모</Text>
+          {/* ✅ 메모: 화면 분량 늘림 (멀티라인 + 높이 증가, 기존 스타일 보존) */}
           <TextInput
             value={memo}
             onChangeText={setMemo}
             placeholder="짧은 글을 남겨보세요"
-            style={styles.input}
+            multiline
+            numberOfLines={6}
+            style={[styles.input, { height: 140, textAlignVertical: 'top' }]}
           />
 
           <TouchableOpacity
@@ -236,8 +321,6 @@ export default function HistoryScreen() {
 }
 
 // 기존 styles는 그대로 유지
-
-
 const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '700', marginBottom: 16, textAlign: 'center', paddingTop: 10},
   label: { fontWeight: '600', marginTop: 10, marginBottom: 4 },

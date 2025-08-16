@@ -5,6 +5,8 @@ import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+
 import {
   Alert,
   FlatList,
@@ -65,7 +67,6 @@ export default function UploadScreen() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
   }, []);
-
   useEffect(() => {
     if (customBreedMode) {
       setShowDropdown(false);
@@ -102,6 +103,7 @@ export default function UploadScreen() {
       setSelectedBreed('기타');
       setBreedInput('기타');
       setCustomBreedMode(true);
+      setCustomBreed((breedInput ?? '').trim());
       breedInputRef.current?.blur();
     } else {
       setBreedInput(breed);
@@ -148,176 +150,205 @@ export default function UploadScreen() {
   };
 
   const uploadBase64ToSupabase = async (base64Uri: string, fileName: string) => {
-    const base64Data = base64Uri.split(',')[1];
-    const buffer = decode(base64Data);
+    try {
+      console.log('📤 [storage] 업로드 시작', fileName);
+      const base64Data = base64Uri.split(',')[1];
+      if (!base64Data) throw new Error('잘못된 base64 URI');
 
-    const { data, error } = await supabase.storage
-      .from('dog-images')
-      .upload(fileName, buffer, {
-        contentType: 'image/jpeg',
-        upsert: true,
-      });
+      const buffer = decode(base64Data);
+      const { data, error } = await supabase.storage
+        .from('dog-images')
+        .upload(fileName, buffer, {
+          contentType: 'image/jpeg',
+          upsert: true,
+        });
 
-    if (error) throw error;
+      if (error) throw error;
 
-    const { data: publicUrl } = supabase.storage.from('dog-images').getPublicUrl(fileName);
-    return publicUrl.publicUrl;
+      const { data: publicUrl } = supabase.storage
+        .from('dog-images')
+        .getPublicUrl(fileName);
+
+      if (!publicUrl?.publicUrl) throw new Error('public URL 생성 실패');
+
+      console.log('✅ [storage] 업로드 완료', publicUrl.publicUrl);
+      return publicUrl.publicUrl;
+    } catch (e: any) {
+      console.error('❌ [storage] 업로드 실패:', e?.message || e);
+      throw e;
+    }
   };
 
+
   const uploadDog = async () => {
+    console.log('🚀 업로드 시작');
+    // 0) 사용자
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return Alert.alert('로그인 정보 불러오기 실패', '다시 로그인해주세요.');
+      Alert.alert('로그인 정보 불러오기 실패', '다시 로그인해주세요.');
+      return;
     }
 
-    if (!name || !selectedBreed || !age || !gender || !imageUrl) {
-      return Alert.alert('모든 필수 정보를 입력해주세요.');
+    // 1) 커스텀 견종 확정 로직을 검증 이전에 반영
+    let finalBreedInput = breedInput;
+    let finalSelectedBreed = selectedBreed;
+
+    if (customBreedMode && customBreed.trim()) {
+      finalSelectedBreed = customBreed.trim();
+      finalBreedInput = finalSelectedBreed;
+    }
+
+    // 2) 필수값 검증
+    if (!name || !finalSelectedBreed || !age || !gender || !imageUrl) {
+      Alert.alert('모든 필수 정보를 입력해주세요.');
+      return;
     }
 
     setUploading(true);
 
-    if (customBreedMode && customBreed.trim()) {
-      setSelectedBreed(customBreed);
-      setBreedInput(customBreed);
-      setPendingCustomBreeds((prev) => [...prev, customBreed]);
-    }
-
-    if (!breeds.includes(selectedBreed)) {
-      setBreeds((prev) => [...prev, selectedBreed]);
-    }
-
-    let uploadedImageUrl = imageUrl;
-    // base64로 새로 선택한 경우만 업로드 수행
-    if (imageUrl?.startsWith('data:image')) {
-      try {
-        uploadedImageUrl = await uploadBase64ToSupabase(imageUrl, `${user.id}_${Date.now()}.jpg`);
-      } catch (e) {
-        console.error('이미지 업로드 에러:', e);
-        setUploading(false);
-        return Alert.alert('이미지 업로드 실패', '다시 시도해주세요.');
+    try {
+      // 3) 로컬 상태 정리(드롭다운/견종 목록 동기화)
+      if (!breeds.includes(finalSelectedBreed)) {
+        setBreeds(prev => [...prev, finalSelectedBreed]);
       }
-    }
+      setSelectedBreed(finalSelectedBreed);
+      setBreedInput(finalBreedInput);
+      if (customBreedMode) {
+        setPendingCustomBreeds(prev => prev.includes(finalSelectedBreed) ? prev : [...prev, finalSelectedBreed]);
+        setCustomBreed('');
+        setCustomBreedMode(false);
+      }
 
+      // 4) 이미지 업로드(필요 시)
+      let uploadedImageUrl = imageUrl;
+      if (imageUrl.startsWith('data:image')) {
+        uploadedImageUrl = await uploadBase64ToSupabase(
+          imageUrl,
+          `${user.id}_${Date.now()}.jpg`
+        );
+        setImageUrl(uploadedImageUrl);
+      }
 
-    setImageUrl(uploadedImageUrl);
+      // 5) 수정 모드
+      if (isEdit && dogId) {
+        console.log('✏️ 수정 모드 업데이트 시작', dogId);
+        const { error } = await supabase
+          .from('dog_profiles')
+          .update({
+            name,
+            breed: finalSelectedBreed,
+            age,
+            gender,
+            image_url: uploadedImageUrl,
+          })
+          .eq('id', dogId);
 
-    if (isEdit && dogId) {
-      const { error } = await supabase
+        if (error) throw new Error(`[dog_profiles] ${error.message}`);
+
+        const { error: locErr } = await supabase
+          .from('locations')
+          .update({
+            image_url: uploadedImageUrl,
+            dog_name: name,
+            breed: finalSelectedBreed,
+            age: String(age),
+          })
+          .eq('dog_id', dogId);
+
+        if (locErr) throw new Error(`[locations] ${locErr.message}`);
+
+        Alert.alert('수정 완료', '강아지 정보가 수정되었습니다.');
+        router.push('/');
+        return;
+      }
+
+      // 6) 신규 등록
+      const newDogId = uuidv4();
+      console.log('🆕 신규 등록 dog_id =', newDogId);
+
+      // 6-1) dog_profiles
+      const { error: insertError } = await supabase
         .from('dog_profiles')
-        .update({
+        .insert({
+          id: newDogId,
+          owner_id: user.id,
           name,
-          breed: selectedBreed,
-          age: age,
+          breed: finalSelectedBreed,
+          age,
           gender,
           image_url: uploadedImageUrl,
-        })
-        .eq('id', dogId);
+        });
 
-      if (error) {
-        setUploading(false);
-        return Alert.alert('수정 실패', error.message);
+      if (insertError) throw new Error(`[dog_profiles] ${insertError.message}`);
+
+      // 6-2) 집 위치
+      const { data: homeData, error: homeError } = await supabase
+        .from('user_home_locations')
+        .select('latitude, longitude')
+        .eq('user_id', user.id)
+        .single();
+
+      if (homeError || !homeData) {
+        throw new Error('내 집 위치가 설정되지 않았습니다. 마이페이지에서 먼저 설정해주세요.');
       }
 
-      await supabase
+      // 6-3) locations upsert
+      //  ⚠️ 실제 유니크 인덱스가 'dog_id'로 되어있는지 확인!
+      //  만약 unique(user_id)라면 onConflict를 'user_id'로 바꿔야 합니다.
+      console.log('📍 locations upsert 시작');
+      const { error: upsertErr } = await supabase
         .from('locations')
-        .update({
-          image_url: uploadedImageUrl,
-          dog_name: name,
-          breed: selectedBreed,
-          age: String(age),
-        })
-        .eq('dog_id', dogId);
+        .upsert(
+          {
+            user_id: user.id,
+            owner_id: user.id,
+            dog_id: newDogId,
+            latitude: homeData.latitude,
+            longitude: homeData.longitude,
+            image_url: uploadedImageUrl,
+            dog_name: name,
+            breed: finalSelectedBreed,
+            age: String(age),
+          },
+          { onConflict: 'dog_id' }
+        );
 
-      Alert.alert('수정 완료', '강아지 정보가 수정되었습니다.');
-      setUploading(false);
-      return router.push('/');
-    }
+      if (upsertErr) {
+        // 여기에서 자주 막힘 → 인덱스 불일치나 유니크 충돌 가능성
+        throw new Error(`[locations] ${upsertErr.message}`);
+      }
+      console.log('✅ locations upsert 완료');
 
-    const { error: insertError, data } = await supabase
-      .from('dog_profiles')
-      .insert({
-        owner_id: user.id,
-        name,
-        breed: selectedBreed,
-        age: age,
-        gender,
-        image_url: uploadedImageUrl,
-      })
-      .select('id')
-      .single();
-
-    if (insertError || !data) {
-      setUploading(false);
-      return Alert.alert('등록 실패', insertError?.message ?? '알 수 없는 오류');
-    }
-
-    const newDogId = data.id;
-
-    const { data: homeData, error: homeError } = await supabase
-      .from('user_home_locations')
-      .select('latitude, longitude')
-      .eq('user_id', user.id)
-      .single();
-
-    if (homeError || !homeData) {
-      setUploading(false);
-      return Alert.alert('위치 오류', '내 집 위치가 설정되지 않았습니다. 마이페이지에서 먼저 설정해주세요.');
-    }
-
-
-    console.log("🔥 user.id 확인:", user.id);
-    const { error: locInsertError } = await supabase
-      .from('locations')
-      .upsert({
-        user_id: user.id,
-        owner_id: user.id,
-        dog_id: newDogId,
-        latitude: homeData.latitude,
-        longitude: homeData.longitude,
-        image_url: uploadedImageUrl,
-        dog_name: name,
-        breed: selectedBreed,
-        age: String(age),
-      }, { onConflict: 'dog_id' });
-
-    if (locInsertError) {
-      console.error('❌ locations upsert 실패:', locInsertError.message);
-      Alert.alert('위치 등록 실패', locInsertError.message);
-      setUploading(false);
-      return;
-    }
-
-    const { data: dogImageData, error: imageInsertError } = await supabase
-      .from('dog_images')
-      .insert([
-        {
+      // 6-4) dog_images (실패해도 치명적 X)
+      const { error: imageInsertError } = await supabase
+        .from('dog_images')
+        .insert([{
           dog_id: newDogId,
           image_url: uploadedImageUrl,
           uploaded_at: new Date().toISOString(),
-          user_id: user.id, // ✅ 꼭 있어야 RLS 통과
-        }
-      ])
-      .select();
+          user_id: user.id,
+        }]);
+      if (imageInsertError) {
+        console.warn('⚠️ dog_images insert 실패:', imageInsertError.message);
+      }
 
-    console.log("🔥 user.id 확인:", user.id);
-
-    if (imageInsertError) {
-      console.error('❌ dog_images insert 실패:', imageInsertError.message);
-    } else if (!dogImageData || dogImageData.length === 0) {
-      console.error('❗ dog_images insert 반환 없음');
-    } else {
-      console.log('✅ dog_images insert 성공:', dogImageData);
+      Alert.alert('등록 완료', '강아지 정보가 등록되었습니다.');
+      router.push('/');
+    } catch (e: any) {
+      console.error('❌ 업로드 실패:', e?.message || e);
+      Alert.alert('업로드 실패', e?.message ?? '알 수 없는 오류가 발생했습니다.');
+    } finally {
+      // ✅ 어떤 경로로 끝나든 스피너 해제
+      setUploading(false);
+      console.log('🏁 업로드 종료');
     }
-
-
-    Alert.alert('등록 완료', '강아지 정보가 등록되었습니다.');
-    setUploading(false);
-    router.push('/');
   };
+
+
 
   const handleRemoveCustomBreed = (b: string) => {
     setPendingCustomBreeds(prev => prev.filter(item => item !== b));
@@ -399,6 +430,7 @@ export default function UploadScreen() {
                   onChangeText={setCustomBreed}
                   placeholder="견종 입력"
                   style={styles.input}
+                  autoFocus
                 />
                 <TouchableOpacity
                   onPress={() => {

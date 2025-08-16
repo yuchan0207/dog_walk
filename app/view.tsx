@@ -34,7 +34,7 @@ type DogImage = {
 };
 
 export default function ViewScreen() {
-  const { dogId } = useLocalSearchParams<{ dogId: string }>();
+  const { dogId, requestId } = useLocalSearchParams<{ dogId: string; requestId?: string }>();
   const router = useRouter();
   const [dog, setDog] = useState<DogProfile | null>(null);
   const [images, setImages] = useState<DogImage[]>([]);
@@ -138,25 +138,42 @@ export default function ViewScreen() {
       return;
     }
 
-    // 기존 요청 삭제 (같은 조합으로)
-    await supabase
+    // ✅ 1) 이미 보낸 '대기중' 요청이 있는지 먼저 확인
+    const { data: existing, error: existErr } = await supabase
       .from('walk_requests')
-      .delete()
+      .select('id, status, created_at')
       .eq('from_user_id', user.id)
       .eq('to_user_id', dog.owner_id)
       .eq('my_dog_id', myDog.id)
-      .eq('target_dog_id', dog.id);
+      .eq('target_dog_id', dog.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    // 새 요청 삽입
+    if (existErr) {
+      Alert.alert('신청 확인 실패', existErr.message);
+      return;
+    }
+
+    if (existing && existing.status === 'pending') {
+      Alert.alert('이미 신청됨', '이 상대에게 보낸 산책 신청이 대기중이에요.');
+      return;
+    }
+
+    // (선택) 이미 수락된 적이 있다면 안내만 하고 끝낼 수도 있음
+    // if (existing && existing.status === 'accepted') {
+    //   Alert.alert('이미 수락됨', '이미 수락된 요청이 있어요. 채팅에서 이어가세요!');
+    //   return;
+    // }
+
+    // ✅ 2) 새 요청 삽입
     const { error } = await supabase.from('walk_requests').insert({
       from_user_id: user.id,
       to_user_id: dog.owner_id,
-      my_dog_id: myDog.id,         // ✅ 내가 보낸 강아지
-      target_dog_id: dog.id,       // ✅ 상대 강아지
+      my_dog_id: myDog.id,
+      target_dog_id: dog.id,
       status: 'pending',
     });
-
-
 
     if (error) {
       Alert.alert('신청 실패', error.message);
@@ -165,6 +182,7 @@ export default function ViewScreen() {
       router.push('/home');
     }
   };
+
 
   const InfoItem = ({ label, value }: { label: string; value: string }) => (
     <View style={styles.infoItem}>
@@ -273,14 +291,15 @@ export default function ViewScreen() {
               <Text style={styles.buttonText}>🗑️ 삭제하기</Text>
             </TouchableOpacity>
           </>
-        ) : (
+        ) : !requestId ? ( // ✅ requestId가 없을 때만 '산책 신청하기' 노출
           <TouchableOpacity
             style={[styles.button, { backgroundColor: '#FF7043' }]}
             onPress={requestWalk}
           >
             <Text style={styles.buttonText}>산책 신청하기</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
+
       </View>
 
       <Modal visible={modalVisible} transparent onRequestClose={() => setModalVisible(false)}>

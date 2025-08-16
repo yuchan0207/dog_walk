@@ -23,13 +23,14 @@ export default function ScheduleScreen() {
   interface ScheduleWithExtras {
     id: string;
     user_id: string;
-    dog_id: string;
-    target_dog_id: string;
+    dog_id: string | null;
+    target_dog_id: string | null;
     date: string;
     title: string;
     status: string;
     memo: string;
     created_at: string;
+    notification_id?: string | null; // ✅ 추가됨
   }
 
   useEffect(() => {
@@ -46,7 +47,7 @@ export default function ScheduleScreen() {
     const walkDate = new Date(schedule.date);
     const notifyTime = new Date(walkDate.getTime() - 20 * 60 * 1000); // 20분 전
 
-    await Notifications.scheduleNotificationAsync({
+    const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: '🐾 산책 알림',
         body: `${schedule.title || '산책'} 시간이 20분 뒤에 시작돼요!`,
@@ -54,11 +55,21 @@ export default function ScheduleScreen() {
       },
       trigger: notifyTime.getTime() as unknown as Notifications.NotificationTriggerInput,
     });
-  };
 
+    // ✅ 알림 ID를 Supabase에 저장
+    await supabase
+      .from('walk_schedules')
+      .update({ notification_id: notificationId })
+      .eq('id', schedule.id);
+  };
 
   const fetchSchedules = async () => {
     setLoading(true);
+    await supabase
+      .from('walk_schedules')
+      .update({ status: '완료' })
+      .lt('scheduled_at', new Date().toISOString())
+      .eq('status', '예정');
     const { data, error } = await supabase
       .from('walk_schedules')
       .select('*')
@@ -77,6 +88,7 @@ export default function ScheduleScreen() {
         status: item.status,
         memo: item.memo ?? '',
         created_at: item.created_at ?? '',
+        notification_id: item.notification_id ?? '', // ✅ 포함
       }));
       setSchedules(mapped);
       mapped.forEach(schedulePushNotification);
@@ -85,6 +97,28 @@ export default function ScheduleScreen() {
   };
 
   const handleDelete = async (id: string) => {
+    // ✅ 삭제 전 notification_id 먼저 조회
+    const { data, error: fetchError } = await supabase
+      .from('walk_schedules')
+      .select('notification_id')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      Alert.alert('삭제 실패', fetchError.message);
+      return;
+    }
+
+    // ✅ 알림 예약이 되어있다면 취소
+    if (data?.notification_id) {
+      try {
+        await Notifications.cancelScheduledNotificationAsync(data.notification_id);
+      } catch (e) {
+        console.warn('알림 취소 중 오류:', e);
+      }
+    }
+
+    // ✅ Supabase에서 삭제
     const { error } = await supabase.from('walk_schedules').delete().eq('id', id);
     if (error) {
       Alert.alert('삭제 실패', error.message);
@@ -121,7 +155,9 @@ export default function ScheduleScreen() {
               <Text style={styles.status}>상태: {item.status}</Text>
               <View style={styles.actions}>
                 <TouchableOpacity
-                  onPress={() => router.push({ pathname: '/edit-schedule', params: { id: item.id } })}
+                  onPress={() =>
+                    router.push({ pathname: '/edit-schedule', params: { id: item.id } })
+                  }
                   style={styles.editButton}
                 >
                   <Text style={styles.editButtonText}>수정</Text>

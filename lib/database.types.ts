@@ -375,6 +375,11 @@ export type Database = {
           dog_id: string | null
           id: string
           memo: string | null
+          notification_id: string | null
+          report_reason: string | null
+          reported: boolean | null
+          review: string | null
+          review_submitted: boolean | null
           scheduled_at: string
           status: string
           target_dog_id: string | null
@@ -385,6 +390,11 @@ export type Database = {
           dog_id?: string | null
           id?: string
           memo?: string | null
+          notification_id?: string | null
+          report_reason?: string | null
+          reported?: boolean | null
+          review?: string | null
+          review_submitted?: boolean | null
           scheduled_at: string
           status?: string
           target_dog_id?: string | null
@@ -395,6 +405,11 @@ export type Database = {
           dog_id?: string | null
           id?: string
           memo?: string | null
+          notification_id?: string | null
+          report_reason?: string | null
+          reported?: boolean | null
+          review?: string | null
+          review_submitted?: boolean | null
           scheduled_at?: string
           status?: string
           target_dog_id?: string | null
@@ -419,7 +434,42 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      locations_public: {
+        Row: {
+          age: string | null
+          breed: string | null
+          dog_id: string | null
+          dog_name: string | null
+          id: string | null
+          image_url: string | null
+          latitude: number | null
+          longitude: number | null
+          owner_id: string | null
+        }
+        Insert: {
+          age?: string | null
+          breed?: string | null
+          dog_id?: string | null
+          dog_name?: string | null
+          id?: string | null
+          image_url?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          owner_id?: string | null
+        }
+        Update: {
+          age?: string | null
+          breed?: string | null
+          dog_id?: string | null
+          dog_name?: string | null
+          id?: string | null
+          image_url?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          owner_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never

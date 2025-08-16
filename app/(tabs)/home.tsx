@@ -35,6 +35,7 @@ export default function HomeScreen() {
   const [dogLocations, setDogLocations] = useState<DogLocation[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [hasUnread, setHasUnread] = useState(false);
+  const [hasHomeLocation, setHasHomeLocation] = useState<boolean | null>(null); // ✅ 집 위치 보유 여부
   const mapRef = useRef<MapView | null>(null);
 
   const fetchDogs = async () => {
@@ -51,22 +52,72 @@ export default function HomeScreen() {
     setLoading(false);
   };
 
-  const checkUnreadMessages = async () => {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return;
+  // ✅ 집 위치 설정 여부 확인
+  const fetchHomeLocationStatus = async (uid: string | null) => {
+    if (!uid) {
+      setHasHomeLocation(null);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('user_home_locations')
+      .select('latitude, longitude')
+      .eq('user_id', uid)
+      .maybeSingle();
 
-    const { data, error: msgError } = await supabase
-      .from('messages')
+    if (error) {
+      console.log('🏠 집 위치 조회 에러:', error.message);
+      setHasHomeLocation(null);
+      return;
+    }
+    const ok = !!(data && data.latitude != null && data.longitude != null);
+    setHasHomeLocation(ok);
+  };
+
+  const checkPendingReview = async () => {
+    const { data, error } = await supabase
+      .from('walk_schedules')
       .select('id')
-      .eq('is_read', false)
-      .neq('sender_id', user.id);
+      .eq('status', '완료')
+      .eq('review_submitted', false)
+      .maybeSingle();
 
-    if (!msgError && data && data.length > 0) {
-      setHasUnread(true);
-    } else {
-      setHasUnread(false);
+    if (!error && data?.id) {
+      router.push({ pathname: '/review', params: { id: data.id } });
     }
   };
+
+  const checkUnreadMessages = async () => {
+    const { data: { user }, error: authErr } = await supabase.auth.getUser();
+    if (authErr || !user) {
+      setHasUnread(false);
+      return;
+    }
+
+    // 1) 내가 속한 채팅방 id 목록 가져오기
+    const { data: rooms, error: roomErr } = await supabase
+      .from('chat_rooms')
+      .select('id')
+      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+
+    if (roomErr || !rooms || rooms.length === 0) {
+      setHasUnread(false);
+      return;
+    }
+
+    const roomIds = rooms.map(r => r.id);
+
+    // 2) 그 방들 안에서, 내가 보낸 게 아닌 미읽음 메시지가 하나라도 있는지 확인
+    const { count, error: msgErr } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true }) // 데이터 안 가져오고 개수만
+      .in('room_id', roomIds)
+      .eq('is_read', false)
+      .neq('sender_id', user.id)
+      .limit(1);
+
+    setHasUnread(!msgErr && !!count && count > 0);
+  };
+
 
   useFocusEffect(
     useCallback(() => {
@@ -89,9 +140,13 @@ export default function HomeScreen() {
           longitudeDelta: 0.01,
         };
         setRegion(newRegion);
-        setCurrentUserId(userData.user?.id ?? null);
+        const uid = userData.user?.id ?? null;
+        setCurrentUserId(uid);
+
         await fetchDogs();
         await checkUnreadMessages();
+        await fetchHomeLocationStatus(uid); // ✅ 집 위치 여부 동기화
+        await checkPendingReview();
       })();
     }, [])
   );
@@ -120,6 +175,25 @@ export default function HomeScreen() {
     };
     setRegion(newRegion);
     mapRef.current?.animateToRegion(newRegion, 1000);
+  };
+
+  // ✅ 업로드 버튼 가드: 집 위치 없으면 설정 유도
+  const handleUploadPress = () => {
+    if (!hasHomeLocation) {
+      Alert.alert(
+        '집 위치가 필요해요',
+        '강아지를 업로드하려면 먼저 집 위치를 설정해 주세요.',
+        [
+          { text: '취소', style: 'cancel' },
+          {
+            text: '지금 설정하기',
+            onPress: () => router.push('/set_home'), // 네 라우트 경로에 맞게 필요하면 변경
+          },
+        ]
+      );
+      return;
+    }
+    router.push('/upload');
   };
 
   if (loading || !region) {
@@ -187,7 +261,8 @@ export default function HomeScreen() {
         </TouchableOpacity>
 
         <View style={styles.bottomButtonContainer}>
-          <TouchableOpacity style={styles.bottomButton} onPress={() => router.push('/upload')}>
+          <TouchableOpacity style={styles.bottomButton} onPress={handleUploadPress}>
+            {/* ✅ 업로드 가드 적용 */}
             <Text style={styles.bottomButtonText}>강아지 업로드</Text>
           </TouchableOpacity>
           <TouchableOpacity

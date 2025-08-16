@@ -65,7 +65,7 @@ export default function ChatList() {
         .eq('status', 'accepted')
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle(); // ← 에러 방지용으로만 변경
 
       let dogName = '';
       if (request?.dog_id) {
@@ -105,41 +105,26 @@ export default function ChatList() {
   const exitChatRoom = async (roomId: string) => {
     if (!userId) return;
 
-    const { data: room } = await supabase
-      .from('chat_rooms')
-      .select('user1_id, user2_id')
-      .eq('id', roomId)
-      .single();
+    // ✅ RLS에 막히지 않는 서버 함수 호출 (user_id는 손대지 않음)
+    const { error: rpcErr } = await (supabase as any).rpc('leave_chat_room', {
+      p_room_id: roomId,
+    });
 
-    if (!room) return;
-
-    const updates: any = {};
-    if (room.user1_id === userId) updates.user1_id = null;
-    else if (room.user2_id === userId) updates.user2_id = null;
-
-    await supabase.from('chat_rooms').update(updates).eq('id', roomId);
-
-    // 둘 다 나간 경우 완전 삭제
-    const { data: updated } = await supabase
-      .from('chat_rooms')
-      .select('user1_id, user2_id')
-      .eq('id', roomId)
-      .single();
-
-    if (updated && !updated.user1_id && !updated.user2_id) {
-      await supabase.from('chat_rooms').delete().eq('id', roomId);
-      await supabase.from('messages').delete().eq('room_id', roomId);
+    if (rpcErr) {
+      Alert.alert('나가기 실패', rpcErr.message ?? '오류가 발생했습니다.');
+      return;
     }
 
-
-    fetchChatRooms(); // 목록 새로고침
+    // ✅ 낙관적 제거 + 목록 새로고침 (원래 흐름 그대로)
+    setChatRooms((prev) => prev.filter((r) => r.roomId !== roomId));
+    fetchChatRooms();
   };
 
   const renderItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={styles.roomItem}
       onPress={() => router.push(`/chat-room/${item.roomId}`)}
-      onLongPress={() => confirmExitRoom(item.roomId)} // ✅ 롱프레스 시 나가기 확인창
+      onLongPress={() => confirmExitRoom(item.roomId)} // 롱프레스 시 나가기 확인창
     >
       <View style={styles.header}>
         <Text style={styles.opponentName}>{item.opponentName}</Text>

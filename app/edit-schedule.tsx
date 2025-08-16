@@ -1,15 +1,16 @@
 'use client';
 
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Notifications from 'expo-notifications'; // ✅ 추가
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 
@@ -21,6 +22,7 @@ export default function EditScheduleScreen() {
   const [date, setDate] = useState(new Date());
   const [status, setStatus] = useState('예정');
   const [showPicker, setShowPicker] = useState(false);
+  const [oldNotificationId, setOldNotificationId] = useState<string | null>(null); // ✅ 기존 알림 ID 저장
 
   const fetchSchedule = async () => {
     const { data, error } = await supabase
@@ -35,6 +37,7 @@ export default function EditScheduleScreen() {
       setTitle(data.memo || '');
       setDate(new Date(data.scheduled_at));
       setStatus(data.status);
+      setOldNotificationId(data.notification_id ?? null); // ✅ 기존 알림 ID 저장
     }
   };
 
@@ -43,9 +46,40 @@ export default function EditScheduleScreen() {
   }, [idString]);
 
   const handleUpdate = async () => {
+    // ✅ 1. 기존 알림 취소
+    if (oldNotificationId) {
+      try {
+        await Notifications.cancelScheduledNotificationAsync(oldNotificationId);
+      } catch (err) {
+        console.warn('기존 알림 취소 실패:', err);
+      }
+    }
+
+    // ✅ 2. 새 알림 예약
+    let newNotificationId: string | null = null;
+    try {
+      const notifyTime = new Date(date.getTime() - 20 * 60 * 1000); // 20분 전
+      newNotificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🐾 산책 알림',
+          body: `${title || '산책'} 시간이 20분 뒤에 시작돼요!`,
+          sound: 'default',
+        },
+        trigger: notifyTime.getTime() as unknown as Notifications.NotificationTriggerInput,
+      });
+    } catch (err) {
+      console.warn('새 알림 예약 실패:', err);
+    }
+
+    // ✅ 3. Supabase에 수정 반영 + 새 알림 ID 저장
     const { error } = await supabase
       .from('walk_schedules')
-      .update({ memo: title, scheduled_at: date.toISOString(), status })
+      .update({
+        memo: title,
+        scheduled_at: date.toISOString(),
+        status,
+        notification_id: newNotificationId,
+      })
       .eq('id', idString);
 
     if (error) {

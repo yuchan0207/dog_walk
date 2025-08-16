@@ -37,43 +37,37 @@ export type Database = {
       }
       dog_histories: {
         Row: {
-          age: string | null
-          breed: string | null
           created_at: string | null
+          date: string | null
           dog_id: string
-          gender: string | null
-          hobbies: string | null
+          hashtags: string[] | null
           id: string
-          image_url: string | null
-          name: string | null
+          image_urls: string[] | null
+          memo: string | null
           owner_id: string | null
-          personality: string | null
+          user_id: string | null
         }
         Insert: {
-          age?: string | null
-          breed?: string | null
           created_at?: string | null
+          date?: string | null
           dog_id: string
-          gender?: string | null
-          hobbies?: string | null
+          hashtags?: string[] | null
           id?: string
-          image_url?: string | null
-          name?: string | null
+          image_urls?: string[] | null
+          memo?: string | null
           owner_id?: string | null
-          personality?: string | null
+          user_id?: string | null
         }
         Update: {
-          age?: string | null
-          breed?: string | null
           created_at?: string | null
+          date?: string | null
           dog_id?: string
-          gender?: string | null
-          hobbies?: string | null
+          hashtags?: string[] | null
           id?: string
-          image_url?: string | null
-          name?: string | null
+          image_urls?: string[] | null
+          memo?: string | null
           owner_id?: string | null
-          personality?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -87,25 +81,25 @@ export type Database = {
       }
       dog_images: {
         Row: {
-          category: string | null
           dog_id: string
           id: string
-          image_url: string | null
-          uploaded_at: string | null
+          image_url: string
+          uploaded_at: string
+          user_id: string
         }
         Insert: {
-          category?: string | null
           dog_id: string
           id?: string
-          image_url?: string | null
-          uploaded_at?: string | null
+          image_url: string
+          uploaded_at?: string
+          user_id: string
         }
         Update: {
-          category?: string | null
           dog_id?: string
           id?: string
-          image_url?: string | null
-          uploaded_at?: string | null
+          image_url?: string
+          uploaded_at?: string
+          user_id?: string
         }
         Relationships: [
           {
@@ -113,6 +107,13 @@ export type Database = {
             columns: ["dog_id"]
             isOneToOne: false
             referencedRelation: "dog_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dog_images_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -215,6 +216,7 @@ export type Database = {
           content: string | null
           created_at: string | null
           id: string
+          is_read: boolean | null
           room_id: string
           sender_id: string | null
         }
@@ -222,6 +224,7 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           id?: string
+          is_read?: boolean | null
           room_id: string
           sender_id?: string | null
         }
@@ -229,10 +232,26 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           id?: string
+          is_read?: boolean | null
           room_id?: string
           sender_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_room"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "chat_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_sender"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -288,8 +307,11 @@ export type Database = {
           dog_id: string | null
           from_user_id: string
           id: string
+          is_read: boolean | null
+          my_dog_id: string | null
           owner_id: string | null
           status: string | null
+          target_dog_id: string | null
           to_user_id: string | null
         }
         Insert: {
@@ -297,8 +319,11 @@ export type Database = {
           dog_id?: string | null
           from_user_id?: string
           id?: string
+          is_read?: boolean | null
+          my_dog_id?: string | null
           owner_id?: string | null
           status?: string | null
+          target_dog_id?: string | null
           to_user_id?: string | null
         }
         Update: {
@@ -306,8 +331,11 @@ export type Database = {
           dog_id?: string | null
           from_user_id?: string
           id?: string
+          is_read?: boolean | null
+          my_dog_id?: string | null
           owner_id?: string | null
           status?: string | null
+          target_dog_id?: string | null
           to_user_id?: string | null
         }
         Relationships: [
@@ -325,14 +353,129 @@ export type Database = {
             referencedRelation: "dog_profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "walk_requests_my_dog_id_fkey"
+            columns: ["my_dog_id"]
+            isOneToOne: false
+            referencedRelation: "dog_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "walk_requests_target_dog_id_fkey"
+            columns: ["target_dog_id"]
+            isOneToOne: false
+            referencedRelation: "dog_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      walk_schedules: {
+        Row: {
+          created_at: string | null
+          dog_id: string | null
+          id: string
+          memo: string | null
+          notification_id: string | null
+          report_reason: string | null
+          reported: boolean | null
+          review: string | null
+          review_submitted: boolean | null
+          scheduled_at: string
+          status: string
+          target_dog_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          dog_id?: string | null
+          id?: string
+          memo?: string | null
+          notification_id?: string | null
+          report_reason?: string | null
+          reported?: boolean | null
+          review?: string | null
+          review_submitted?: boolean | null
+          scheduled_at: string
+          status?: string
+          target_dog_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          dog_id?: string | null
+          id?: string
+          memo?: string | null
+          notification_id?: string | null
+          report_reason?: string | null
+          reported?: boolean | null
+          review?: string | null
+          review_submitted?: boolean | null
+          scheduled_at?: string
+          status?: string
+          target_dog_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "walk_schedules_dog_id_fkey"
+            columns: ["dog_id"]
+            isOneToOne: false
+            referencedRelation: "dog_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "walk_schedules_target_dog_id_fkey"
+            columns: ["target_dog_id"]
+            isOneToOne: false
+            referencedRelation: "dog_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      locations_public: {
+        Row: {
+          age: string | null
+          breed: string | null
+          dog_id: string | null
+          dog_name: string | null
+          id: string | null
+          image_url: string | null
+          latitude: number | null
+          longitude: number | null
+          owner_id: string | null
+        }
+        Insert: {
+          age?: string | null
+          breed?: string | null
+          dog_id?: string | null
+          dog_name?: string | null
+          id?: string | null
+          image_url?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          owner_id?: string | null
+        }
+        Update: {
+          age?: string | null
+          breed?: string | null
+          dog_id?: string | null
+          dog_name?: string | null
+          id?: string | null
+          image_url?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          owner_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      leave_chat_room: {
+        Args: { p_room_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

@@ -38,6 +38,11 @@ export default function HistoryViewScreen() {
   const [editMemo, setEditMemo] = useState('');
   const [editHashtags, setEditHashtags] = useState('');
 
+  // ✅ 추가: 일지 있는 날짜를 원형 배경으로 표시하기 위한 마킹 상태
+  const [markedDates, setMarkedDates] = useState<
+    Record<string, { selected: boolean; selectedColor: string }>
+  >({});
+
   useEffect(() => {
     (async () => {
       const {
@@ -60,7 +65,26 @@ export default function HistoryViewScreen() {
       .select('*')
       .eq('dog_id', dogId)
       .order('date', { ascending: false });
-    if (!error && data) setDiaries(data);
+    if (!error && data) {
+      setDiaries(data);
+
+      // ✅ 일지가 있는 날짜들을 연한 오렌지 원형 배경으로 표시
+      const marks: Record<string, { selected: boolean; selectedColor: string }> = {};
+      for (const d of data) {
+        if (d.date) {
+          marks[d.date] = { selected: true, selectedColor: '#FFCC80' }; // 연한 오렌지
+        }
+      }
+      setMarkedDates(marks);
+
+      // ✅ 기본 선택 날짜: "내가 올린 최신 일지" → 없으면 전체 최신
+      const myLatest = data.find((d) => d.user_id === myUserId && d.date);
+      if (myLatest?.date) {
+        setSelectedDate(myLatest.date);
+      } else if (data[0]?.date) {
+        setSelectedDate(data[0].date);
+      }
+    }
   };
 
   const checkIfMine = async () => {
@@ -132,7 +156,15 @@ export default function HistoryViewScreen() {
 
             {calendarOpen && (
               <Calendar
-                markedDates={{ [selectedDate]: { selected: true, marked: true, selectedColor: '#FFA726' } }}
+                // ✅ 일지 있는 날(연한 오렌지) + 선택한 날(진한 오렌지) 합성
+                markedDates={{
+                  ...markedDates,
+                  [selectedDate]: {
+                    ...(markedDates[selectedDate] || {}),
+                    selected: true,
+                    selectedColor: '#FFA726', // 선택한 날은 진한 오렌지
+                  },
+                }}
                 onDayPress={(day) => {
                   setSelectedDate(day.dateString);
                   setCalendarOpen(false);
